@@ -230,7 +230,8 @@ Note that starting 8 Spring Boot applications, 4 MongoDB instances and a RabbitM
 #### Before you start
 - Install Docker and Docker Compose.
 - Change environment variable values in `.env` file for more security or leave it as it is.
-- Build the project: `mvn package [-DskipTests]`
+- Use a JDK 8 installation (`mvn -version` must report Java 1.8). With SDKMAN, run `sdk use java 8.0.482.1-sem` if this version is installed.
+- Build and run all tests: `mvn clean package`. Tests use embedded MongoDB, a local exchange-rate HTTP server, and an in-memory stream binder; Config Server, Eureka, and RabbitMQ do not need to be running. Maven dependencies and the embedded MongoDB binary may need to be downloaded on the first run.
 
 #### Production mode
 In this mode, all latest images will be pulled from Docker Hub.
