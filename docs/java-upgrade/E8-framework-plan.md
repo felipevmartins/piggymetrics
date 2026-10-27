@@ -91,3 +91,65 @@ Entregue:
 - `account-service/pom.xml`: segunda execucao do Surefire (`isolated-resilience`) com `reuseForks=false` para essas duas classes. Ribbon, Archaius e Hystrix mantem estado estatico na JVM (circuitos abertos por testes de 503 e listas de servidores) e quebravam o balanceamento por nome quando outro contexto Spring rodava antes. Isolar todo o modulo custaria 8m30 contra 4m38 atuais.
 
 Nao coberto (a tratar no inicio da F1, junto do desenho de metricas): Spring Cloud Bus/RabbitMQ, stream `hystrix.stream` (o endpoint de actuator responde 401 sem credencial na stack real), Hystrix no `notification-service`, login completo alem do `OAuthTokenContractTest` existente, Windows em Java 21.
+
+## F1 - Ribbon para Spring Cloud LoadBalancer, Hystrix para Spring Cloud CircuitBreaker (Resilience4j)
+
+Estado: `concluida` (2026-10-27).
+
+### Entrada
+- Revisao 62b4641 (branch `pilot/java8-to-21`), arvore limpa no inicio. Evidencia da F0 vale: nada mudou desde o fechamento (113 testes, `compare_surefire.py` 0 removidos).
+- Stack local ativa (imagens Java 21 da F0): usada so para observar baseline de Bus/Rabbit, nao para aceite.
+
+### Matriz
+| Item | Valor |
+| --- | --- |
+| JDK de build/testes e JVM da aplicacao | Temurin 21.0.13, Linux (WSL2) |
+| Release do bytecode | 8 (major 52), inalterado |
+| Framework / train | Boot 2.3.12.RELEASE / Hoxton.SR12 (inalterado) |
+| Resilience4j via circuitbreaker | `spring-cloud-circuitbreaker-dependencies` 1.0.6.RELEASE (gerenciado pelo Hoxton.SR12); versao do `resilience4j-*` a confirmar pela resolucao do Maven |
+| Modulos | account-service, statistics-service, notification-service (clientes); gateway, monitoring e turbine-stream-service nao mudam em F1 |
+
+### Fontes oficiais lidas (2026-10-27)
+- Spring Cloud OpenFeign 2.2.x (Hoxton), https://docs.spring.io/spring-cloud-openfeign/docs/2.2.10.RELEASE/reference/html/: "If Spring Cloud CircuitBreaker is on the classpath and `feign.circuitbreaker.enabled=true`, Feign will wrap all methods with a circuit breaker"; nome do circuito `<feignClientName>_<metodo>` (a pagina mistura `#` e `_`); `fallback`/`fallbackFactory` iguais ao Hystrix; `spring-cloud-starter-openfeign` suporta Ribbon e `spring-cloud-starter-loadbalancer`; Ribbon e o padrao por compatibilidade e se desliga com `spring.cloud.loadbalancer.ribbon.enabled=false`. Decisao: Hoxton suporta ambos os substitutos no Feign.
+- Confirmacao no artefato: `spring-cloud-openfeign-core` 2.2.9.RELEASE (Hoxton.SR12) contem `FeignCircuitBreaker`, `FeignCircuitBreakerTargeter` e `loadbalancer/FeignBlockingLoadBalancerClient` (`unzip -l`).
+- Spring Cloud Commons 2.2.9 (Hoxton), https://docs.spring.io/spring-cloud-commons/docs/2.2.9.RELEASE/reference/html/: algoritmo padrao `RoundRobinLoadBalancer`; instancias estaticas pelo `SimpleDiscoveryClient` em `spring.cloud.discovery.client.simple.instances.<servico>[i].uri`, usado quando nao ha `DiscoveryClient` de registro; retry nao reativo so com Spring Retry no classpath, desligavel por `spring.cloud.loadbalancer.retry.enabled=false`; cache com ttl de 35 s (`spring.cloud.loadbalancer.cache.*`). A pagina nao manda excluir o starter do Ribbon; usa a propriedade.
+- Spring Cloud CircuitBreaker 2.0.2 (https://docs.spring.io/spring-cloud-circuitbreaker/docs/2.0.2/reference/html/): configuracao por `Customizer<Resilience4JCircuitBreakerFactory>` e `TimeLimiterConfig`; propriedades `resilience4j.timelimiter.instances.*` vencem o Java config. ATENCAO: e a pagina de 2.0.2 (train 2020.0), nao a do 1.0.6 do Hoxton. A API de `Resilience4JCircuitBreakerFactory` deve ser conferida contra o 1.0.6 pelo comportamento nos testes.
+- Spring Cloud Gateway/Zuul: o gateway ainda usa Zuul, que depende de Ribbon e de Hystrix; fica fora de F1 e sai na F4. Consequencia registrada: Ribbon continua no classpath so do `gateway` ate la.
+
+### Mudanca pretendida
+1. account-service: remover `spring-cloud-starter-netflix-hystrix`, `spring-cloud-netflix-hystrix-stream` e `@EnableCircuitBreaker`; adicionar `spring-cloud-starter-circuitbreaker-resilience4j` e `spring-cloud-starter-loadbalancer`; `feign.hystrix.enabled` vira `feign.circuitbreaker.enabled`; timeout de 10 s (`hystrix...timeoutInMilliseconds`) vira `TimeLimiter` equivalente.
+2. statistics-service e notification-service: remover `spring-cloud-netflix-hystrix-stream`; `spring-cloud-starter-loadbalancer` onde ha chamada por nome (notification para account-service).
+3. Excluir o Ribbon transitivo do `eureka-client` nesses tres modulos e fixar `spring.cloud.loadbalancer.ribbon.enabled=false`.
+4. `spring-cloud-starter-bus-amqp` fica como esta (Bus nao e substituido em F1).
+5. Os testes de contrato de Ribbon/Hystrix passam a expressar o mesmo contrato nas novas propriedades; o que mudar de valor e registrado aqui como mudanca deliberada, sem afrouxar asserts.
+
+### Caracterizacao de baseline (stack local, 2026-10-27, antes de editar)
+- RabbitMQ (API de management, guest): exchanges de usuario `springCloudBus`, `springCloudHystrixStream`, `hystrixStreamOutput` (topic). Bindings: 3 filas anonimas `springCloudBus.anonymous.*` (1 consumidor cada) e 1 fila `springCloudHystrixStream.anonymous.*` (turbine). Nenhuma mensagem publicada nos exchanges ate agora (`message_stats` vazio).
+- Actuator dos tres servicos com token de client_credentials: so `health` e `info`. Nao ha `hystrix.stream` nem `metrics` expostos; a unica via de metrica de circuito e o stream Hystrix pelo Rabbit para o turbine.
+- Efeito esperado de F1: Bus inalterado (3 filas); `springCloudHystrixStream` deixa de receber produtores; turbine e monitoring ficam sem origem de dados ate o passo F1b (D2: remocao dos dois modulos e visao Prometheus/Grafana). Decisao: F1b nao entra neste commit; fica `pendente` com esse motivo.
+- Limites: sem Testcontainers no repo (D3 prevista para F4), a caracterizacao de Bus fica por observacao da stack real; os testes automatizados mantem `spring.cloud.bus.enabled=false`.
+
+### Saida (gates)
+`mvn -B -ntp clean verify` exit 0; `compare_surefire.py` baseline E4g contra o resultado: 0 removidos, adicionados explicados; `python3 tools/check_bytecode.py 52` passa; contratos de balanceamento por nome, timeout com fallback e servidor morto verdes (ou com valor atualizado e registrado); stack reconstruida com imagens novas e fluxo account -> statistics observado; Rabbit com mesmas 3 filas de Bus.
+
+### Recuperacao
+`git revert` do commit da F1 (sem dados envolvidos: nenhuma mudanca de esquema, token ou mensagem persistida); imagens anteriores `sqshq/piggymetrics-*` da F0 permanecem locais ate a recompilacao (guardar tag `f0` antes de reconstruir). Ensaio de retorno: pendente.
+
+### Resultado (2026-10-27)
+- Base: 62b4641 + alteracoes da F1 (commit desta etapa). JDK Temurin 21.0.13.
+- `mvn -B -ntp clean verify`: exit 0, 9 modulos SUCCESS, 113 testes, 0 falhas, 0 ignorados.
+- `compare_surefire.py` (baseline E4g, 110) contra o resultado (113): removidos=0, adicionados=3 (contratos da F0, um renomeado: `slowServerBeyondTimeLimitYieldsFallbackWithoutExceptionAndBoundedLatency`), nao_aprovados=0, ok=True.
+- `python3 tools/check_bytecode.py 52`: todos os conjuntos ok.
+- Contratos mantidos sem alterar asserts: round robin por nome 3/3 em 6 chamadas; fallback por timeout (1500 ms) com latencia < 4500 ms; servidor morto 3/6. Com LoadBalancer o comportamento observado e igual ao do Ribbon; nao ha mudanca deliberada nos contratos de balanceamento.
+- Stack reconstruida (config, account, statistics, notification): RabbitMQ com as mesmas 3 filas `springCloudBus.anonymous.*` (1 consumidor cada); `hystrixStreamOutput` com taxa de publicacao 0.0 (o total antigo vem de auth/gateway, que seguem em Hystrix). Fluxo observado: `POST /accounts/` (account -> auth, 200), `PUT /accounts/current` (account -> statistics por nome via LoadBalancer, 200); statistics recebeu a chamada e falhou na API externa de cambio (401, falha externa conhecida), exercitando o fallback do account. Notification sobe sem erros; a chamada notification -> account depende do agendamento e nao foi disparada manualmente.
+
+### Mudancas deliberadas
+- Nao ha mais publicacao do stream Hystrix no RabbitMQ pelos tres servicos; turbine/monitoring ficam sem origem ate a F1b.
+- `feign.hystrix.enabled` -> `feign.circuitbreaker.enabled`; timeout Hystrix de 10 s -> `TimeLimiter` de `piggymetrics.circuit-breaker.timeout` (10 s).
+- Contorno do Sleuth 2.2.8 (`feignBuilder` simples sombreia o builder de circuit breaker): bean `feignCircuitBreakerBuilder` em `CircuitBreakerConfiguration`; remover junto com o Sleuth na F3.
+- Ribbon, Hystrix e Archaius excluidos de eureka-client e openfeign nos tres modulos.
+
+### Pendencias
+- F1b (`pendente`): remover monitoring e turbine-stream-service, adicionar Prometheus/Grafana com nomes reais de metricas do endpoint e expor metricas Resilience4j. Auth e gateway ainda tem o stream Hystrix (gateway/Zuul sai na F4).
+- A execucao surefire `isolated-resilience` (reuseForks=false) do account-service foi mantida; reavaliar se ainda e necessaria sem estado estatico de Ribbon/Archaius/Hystrix.
+- Retorno: nao ensaiado. Tag `f0-final` e imagens `:f0` existem.

@@ -17,7 +17,7 @@ import static org.hamcrest.Matchers.containsString;
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
-        "feign.hystrix.enabled=true"
+        "feign.circuitbreaker.enabled=true"
 })
 public class StatisticsServiceClientFallbackTest {
     @Autowired

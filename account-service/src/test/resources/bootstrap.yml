@@ -9,11 +9,6 @@ spring:
     bus:
       enabled: false
 
-hystrix:
-  stream:
-    queue:
-      enabled: false
-
 # Explicit local fixture for contexts with Config Server disabled. Never used in production.
 security:
   oauth2:

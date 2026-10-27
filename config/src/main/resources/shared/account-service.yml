@@ -22,5 +22,9 @@ server:
   port: 6000
 
 feign:
-  hystrix:
+  circuitbreaker:
     enabled: true
+
+piggymetrics:
+  circuit-breaker:
+    timeout: 10s

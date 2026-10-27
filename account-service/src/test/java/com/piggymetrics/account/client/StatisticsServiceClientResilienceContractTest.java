@@ -2,6 +2,7 @@ package com.piggymetrics.account.client;
 
 import com.piggymetrics.account.domain.Account;
 import com.sun.net.httpserver.HttpServer;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -28,17 +29,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Characterization of name-based client-side load balancing and the Hystrix timeout fallback of
- * {@link StatisticsServiceClient}, with no Eureka. It records the behavior of the current Ribbon/Hystrix
- * stack so a replacement (Spring Cloud LoadBalancer / CircuitBreaker) can be compared with it.
+ * Characterization of name-based client-side load balancing and the circuit breaker time limit fallback of
+ * {@link StatisticsServiceClient}, with no Eureka. It records the behavior of Spring Cloud LoadBalancer and
+ * CircuitBreaker (Resilience4j); it replaced the Ribbon/Hystrix characterization of F0 (see the F1 record of the E8 plan).
  * The 'url' property of the client is left empty, which makes Feign resolve the service by name.
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
         "clients.statistics-service.url=",
-        "feign.hystrix.enabled=true",
-        "ribbon.eureka.enabled=false",
-        "hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds=1500"})
+        "feign.circuitbreaker.enabled=true",
+        "piggymetrics.circuit-breaker.timeout=1500ms"})
 public class StatisticsServiceClientResilienceContractTest {
     private static final HttpServer FIRST = startServer("first");
     private static final HttpServer SECOND = startServer("second");
@@ -47,18 +47,19 @@ public class StatisticsServiceClientResilienceContractTest {
 
     @Autowired private StatisticsServiceClient statistics;
     @Autowired private OAuth2AuthorizedClientService store;
+    @Autowired private CircuitBreakerRegistry circuitBreakers;
     @Rule public final OutputCaptureRule output = new OutputCaptureRule();
 
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         registry.add("security.oauth2.client.accessTokenUri", () -> base(FIRST) + "/oauth/token");
-        registry.add("statistics-service.ribbon.listOfServers",
-                () -> "127.0.0.1:" + FIRST.getAddress().getPort() + ",127.0.0.1:" + SECOND.getAddress().getPort());
+        registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[0].uri", () -> base(FIRST));
+        registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[1].uri", () -> base(SECOND));
     }
 
     @Before
     public void reset() {
-        com.netflix.hystrix.Hystrix.reset(); // circuit state is static in the JVM and leaks between contexts
+        resetCircuits();
         store.removeAuthorizedClient("account-service", "account-service");
         HITS.clear();
         FIRST_DELAY_MS.set(0);
@@ -67,7 +68,7 @@ public class StatisticsServiceClientResilienceContractTest {
     @After
     public void restoreFixture() {
         FIRST_DELAY_MS.set(0);
-        com.netflix.hystrix.Hystrix.reset();
+        resetCircuits();
     }
 
     @AfterClass
@@ -87,7 +88,7 @@ public class StatisticsServiceClientResilienceContractTest {
     }
 
     @Test
-    public void slowServerBeyondHystrixTimeoutYieldsFallbackWithoutExceptionAndBoundedLatency() {
+    public void slowServerBeyondTimeLimitYieldsFallbackWithoutExceptionAndBoundedLatency() {
         FIRST_DELAY_MS.set(6000);
         long slowest = 0;
         for (int i = 0; i < 4; i++) {
@@ -97,6 +98,10 @@ public class StatisticsServiceClientResilienceContractTest {
         }
         output.expect(containsString("Error during update statistics for account: timeout-"));
         assertTrue("a call took " + slowest + " ms, expected near the 1500 ms timeout", slowest < 4500);
+    }
+
+    private void resetCircuits() {
+        circuitBreakers.getAllCircuitBreakers().forEach(io.github.resilience4j.circuitbreaker.CircuitBreaker::reset);
     }
 
     private static String base(HttpServer server) {

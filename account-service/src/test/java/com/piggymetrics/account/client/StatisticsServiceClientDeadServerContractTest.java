@@ -2,6 +2,7 @@ package com.piggymetrics.account.client;
 
 import com.piggymetrics.account.domain.Account;
 import com.sun.net.httpserver.HttpServer;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -22,15 +23,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.assertEquals;
 
 /**
- * Characterization of the current Ribbon behavior when one listed server refuses connections: the
- * call must not throw (Hystrix fallback), and the live server receives exactly half of the requests.
+ * Characterization of the Spring Cloud LoadBalancer behavior when one listed server refuses connections:
+ * the call must not throw (circuit breaker fallback), and the live server receives exactly half of the requests.
+ * The value is the same one observed with Ribbon/Hystrix in F0, so the replacement kept this contract.
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
         "clients.statistics-service.url=",
-        "feign.hystrix.enabled=true",
-        "ribbon.eureka.enabled=false",
-        "hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds=3000"})
+        "feign.circuitbreaker.enabled=true",
+        "piggymetrics.circuit-breaker.timeout=3000ms"})
 public class StatisticsServiceClientDeadServerContractTest {
     private static final int CLOSED_PORT = closedPort();
     private static final HttpServer LIVE = startLive();
@@ -39,24 +40,31 @@ public class StatisticsServiceClientDeadServerContractTest {
 
     @Autowired private StatisticsServiceClient statistics;
     @Autowired private OAuth2AuthorizedClientService store;
+    @Autowired private CircuitBreakerRegistry circuitBreakers;
 
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String live = "127.0.0.1:" + LIVE.getAddress().getPort();
         registry.add("security.oauth2.client.accessTokenUri", () -> "http://" + live + "/oauth/token");
-        registry.add("statistics-service.ribbon.listOfServers", () -> "127.0.0.1:" + CLOSED_PORT + "," + live);
+        registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[0].uri",
+                () -> "http://127.0.0.1:" + CLOSED_PORT);
+        registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[1].uri", () -> "http://" + live);
     }
 
     @Before
     public void reset() {
-        com.netflix.hystrix.Hystrix.reset(); // circuit state is static in the JVM and leaks between contexts
+        resetCircuits();
         store.removeAuthorizedClient("account-service", "account-service");
         LIVE_HITS.set(0);
     }
 
     @org.junit.After
-    public void resetCircuits() {
-        com.netflix.hystrix.Hystrix.reset();
+    public void resetCircuitsAfter() {
+        resetCircuits();
+    }
+
+    private void resetCircuits() {
+        circuitBreakers.getAllCircuitBreakers().forEach(io.github.resilience4j.circuitbreaker.CircuitBreaker::reset);
     }
 
     @AfterClass
@@ -69,9 +77,9 @@ public class StatisticsServiceClientDeadServerContractTest {
         for (int i = 0; i < CALLS; i++) {
             statistics.updateStatistics("dead-" + i, new Account());
         }
-        // Observed with Ribbon (Boot 2.3 / Hoxton): strict alternation and no retry on the next server for a
-        // refused connection, so half of the PUTs end in the Hystrix fallback. A replacement that retries
-        // changes this contract on purpose and must update this value together with the plan.
+        // Observed with LoadBalancer (Boot 2.3 / Hoxton), same as Ribbon before: strict alternation and no retry on
+        // the next server for a refused connection, so half of the PUTs end in the circuit breaker fallback. A change
+        // that retries alters this contract on purpose and must update this value together with the plan.
         assertEquals(3, LIVE_HITS.get());
     }
 

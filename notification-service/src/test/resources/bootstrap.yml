@@ -9,11 +9,6 @@ spring:
     bus:
       enabled: false
 
-hystrix:
-  stream:
-    queue:
-      enabled: false
-
 # Explicit fixture when Config Server is disabled; no production credentials.
 security:
   oauth2:

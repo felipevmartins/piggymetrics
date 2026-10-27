@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(properties = "feign.hystrix.enabled=true")
+@SpringBootTest(properties = "feign.circuitbreaker.enabled=true")
 @AutoConfigureMockMvc
 public class AccountBearerContractTest {
     private static final AtomicInteger USERINFO_CALLS = new AtomicInteger();

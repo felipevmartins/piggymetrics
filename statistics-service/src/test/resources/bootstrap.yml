@@ -9,11 +9,6 @@ spring:
     bus:
       enabled: false
 
-hystrix:
-  stream:
-    queue:
-      enabled: false
-
 # Explicit local fixture when Config Server is disabled; production keeps its configured userinfo URI.
 security:
   oauth2:

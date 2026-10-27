@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real Spring-created Feign clients against a local HTTP issuer and downstream endpoints. */
 @RunWith(SpringRunner.class)
-@SpringBootTest(properties = "feign.hystrix.enabled=true")
+@SpringBootTest(properties = "feign.circuitbreaker.enabled=true")
 @AutoConfigureMockMvc
 public class ServiceOAuthClientContractTest {
     private static final HttpServer SERVER = startServer();
@@ -134,7 +134,7 @@ public class ServiceOAuthClientContractTest {
     public void rejectedClientCredentialsPreventBothDownstreamCalls() {
         issuerStatus = 401;
         assertAuthCallFails();
-        statistics.updateStatistics("rejected-client", new Account()); // Existing Hystrix fallback returns void.
+        statistics.updateStatistics("rejected-client", new Account()); // Existing circuit breaker fallback returns void.
         output.expect(containsString("Error during update statistics for account: rejected-client"));
         assertEquals(2, TOKEN_CALLS.get());
         assertTrue(DESTINATIONS.isEmpty());
