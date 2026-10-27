@@ -156,7 +156,7 @@ Estado: `concluida` (2026-10-27).
 
 ## F2 - Boot 2.7.18 / Cloud 2021.0.9, bytecode 11
 
-Estado: `em_execucao` (2026-10-27). Bloqueios resolvidos por decisao do usuario (abaixo) e pela F1b (7724fc0).
+Estado: `concluida` (2026-10-27). Bloqueios resolvidos por decisao do usuario (abaixo) e pela F1b (7724fc0). Resultado, mudancas deliberadas e pendencias no fim do documento.
 
 ### Entrada
 - Revisao f2bab33 (F1 concluida), arvore limpa, 113 testes, bytecode 52. Runtime e build Temurin 21.0.13.
@@ -240,3 +240,33 @@ Ja registradas em D2 (Spring Cloud CircuitBreaker "Collecting Metrics", Resilien
 
 ### Recuperacao F2
 `git revert` dos commits da F2; tag `f1b-final` e imagens `:f1b` guardadas antes de reconstruir. Sem mudanca de dados/esquema.
+
+### Resultado F2 (2026-10-27)
+- Matriz final: Boot 2.7.18, Cloud 2021.0.9 (gateway/openfeign/config 3.1.9, circuitbreaker 2.1.8, bus 3.1.3, sleuth 3.1.10), bytecode 11 (major 55), runtime e build Temurin 21.0.13.
+- Testes: 116 executados, 0 erros, 0 falhas, 0 ignorados. `check_bytecode.py 55`: ok. `compare_surefire.py` (baseline E4g): before=110 after=116 removed=2 added=8 not_passed=0, `ok=False` so pelos 2 removidos da F1b. Adicionados: 3 contratos da F0, 3 de `GatewayRoutingContractTest` e 2 de `OAuthTokenContractTest` (`serverScopeTokenMayCreateUsers`, `uiScopeTokenIsForbiddenFromCreatingUsers`).
+- Rastreabilidade do gate: o `clean verify` do reactor inteiro ficou verde antes do ajuste de seguranca do auth. Depois do ajuste, o reactor completo foi rodado de novo e falhou so em `UserRepositoryTest` (auth), por causa da primeira versao da correcao; o auth-service foi corrigido e reverificado sozinho (`-pl auth-service clean verify`, 17 testes, exit 0). Os outros 6 modulos tinham passado no reactor com o mesmo codigo. Nao houve um unico `verify` do reactor inteiro com o codigo final.
+- Roteamento: `GatewayRoutingContractTest` escrito sobre Zuul (commit bba71f5) passa sem mudar asserts sobre Spring Cloud Gateway 3.1.9 (reativo): prefixos sem strip, Authorization e Cookie repassados, `/index.html` servido e nao encaminhado, caminho desconhecido 404 sem chegar ao downstream.
+- Stack reconstruida e observada: 5 servicos registrados no Eureka; `POST /accounts/` 200; login por password grant legado (`browser`, escopo `ui`) com token; `GET /accounts/current` 200; sem token 401; token `ui` em `POST /uaa/users` 403; `POST /uaa/users` com token `server` 200 direto e pelo gateway; `PUT /accounts/current` 200 com a chamada account -> statistics autenticada pelo token de servico (mesmo traceId nos dois); `GET /` 200 e caminho desconhecido 404 no gateway; Prometheus com os 3 alvos `up` e series `resilience4j_circuitbreaker_calls_seconds_count` para `AuthServiceClient#createUser` (3 successful) e `StatisticsServiceClient#updateStatistics`; Grafana health 200.
+- Falha externa conhecida e preexistente: `GET https://api.exchangeratesapi.io/latest` devolve 401, o statistics falha, o circuit breaker registra `failed` e o fallback devolve 200 ao `PUT`. Por isso `/statistics/current` fica vazio nesta stack; a persistencia de estatisticas com cambio real nao foi observada.
+
+### Achados e correcoes F2
+- Boot 2.4+ sem JUnit 4 no starter de teste: `junit-vintage-engine` nos modulos de teste preserva as identidades.
+- Boot 2.3+ sem validacao no starter web: `spring-boot-starter-validation` no auth-service.
+- Flapdoodle: o pin 1.50.3 e incompativel com Boot 2.7 (`RuntimeConfig` ausente); removido, a versao gerenciada (3.4.11) exige `spring.mongodb.embedded.version`, fixada em 3.5.5 nos `application.yml` de teste dos 4 servicos.
+- Mockito 4: `org.mockito.Matchers` removido; `ArgumentMatchers` em `MongoUserDetailsServiceTest`.
+- Falha so vista na stack real: no auth-service, `@PreAuthorize("#oauth2.hasScope('server')")` (UserController) levantava `EL1011E ... on null context object` porque, sob Security 5.7, o autoconfigure legado deixou de aplicar o `OAuth2MethodSecurityExpressionHandler`; `POST /accounts/` devolvia 500. Os testes existentes nao exercitavam a expressao (o controller e testado em standalone). Correcao: `MethodSecurityConfig` expoe o handler como bean estatico; `@EnableGlobalMethodSecurity` continua em `AuthApplication` (movê-la quebrava o slice `@DataMongoTest`, que perdia o `ObjectPostProcessor`). Os 2 testes novos reproduzem o `EL1011E` sem a correcao (verificado desfazendo-a) e passam com ela.
+- Token store em memoria do auth (`InMemoryTokenStore`, preexistente): reiniciar so o auth-service invalida o token de servico que account/statistics/notification mantem em cache e as chamadas autenticadas dao 401 ate esses servicos reiniciarem ou o token expirar (~12 h). Visto ao recriar so o auth; resolvido reiniciando os dependentes. Nao e regressao da F2; fica como risco operacional.
+
+### Mudancas deliberadas F2
+- Zuul substituido por Spring Cloud Gateway reativo (decisao do usuario); `gateway.yml` passa a usar `spring.cloud.gateway.*`; `@EnableZuulProxy` removido; o `reuseForks=false` temporario do Surefire do gateway foi removido.
+- `spring-cloud-starter-oauth2` 2.2.5.RELEASE fixado fora do BOM no auth-service (decisao do usuario); `WebSecurityConfigurerAdapter` mantido.
+- `spring-cloud-starter-bootstrap` adicionado onde ha `bootstrap.yml`.
+- 2 testes novos em `OAuthTokenContractTest` (acima); Flapdoodle sem pin proprio.
+
+### Pendencias F2
+- O workaround `feignCircuitBreakerBuilder` (Sleuth) permanece ate a F3.
+- Flapdoodle -> Testcontainers e `mongo:3` continuam na F4m; o mongod embutido 3.5.5 roda em Java 21 nesta maquina.
+- Reavaliar a execucao `isolated-resilience` do Surefire no account-service (nao reavaliada na F2).
+- Comportamento do gateway reativo com cookies/CORS no navegador nao foi verificado em navegador, so por curl e contrato.
+- Rollback da F2 nao ensaiado. Fluxo de estatisticas com cambio real nao observado (API externa 401).
+- Nao existe teste automatizado da regra `EndpointRequest.to("prometheus")` (F1b).

@@ -12,6 +12,9 @@ backup:
     attachment: backup.json
 
 spring:
+  mongodb:
+    embedded:
+      version: 3.5.5
   data:
     mongodb:
       database: piggymetrics

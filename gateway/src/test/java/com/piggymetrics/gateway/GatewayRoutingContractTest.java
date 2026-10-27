@@ -25,7 +25,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Contrato de roteamento externo do gateway: prefixos mantidos (sem strip), Authorization e Cookie
  * repassados ao servico de destino, estaticos publicos e rota desconhecida sem destino.
- * Os destinos sao servidores locais; o contrato e o mesmo antes e depois da troca do Zuul.
+ * Os destinos sao servidores locais; o contrato e o mesmo antes (Zuul) e depois (Spring Cloud Gateway) da troca.
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -67,12 +67,12 @@ public class GatewayRoutingContractTest {
         String url = "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort();
         String[][] routes = {{"auth-service", "/uaa/**"}, {"account-service", "/accounts/**"},
                 {"statistics-service", "/statistics/**"}, {"notification-service", "/notifications/**"}};
-        registry.add("zuul.ignoredServices", () -> "*");
-        for (String[] r : routes) {
-            registry.add("zuul.routes." + r[0] + ".path", () -> r[1]);
-            registry.add("zuul.routes." + r[0] + ".url", () -> url);
-            registry.add("zuul.routes." + r[0] + ".stripPrefix", () -> "false");
-            registry.add("zuul.routes." + r[0] + ".sensitiveHeaders", () -> "");
+        for (int i = 0; i < routes.length; i++) {
+            String prefix = "spring.cloud.gateway.routes[" + i + "].";
+            String[] r = routes[i];
+            registry.add(prefix + "id", () -> r[0]);
+            registry.add(prefix + "uri", () -> url);
+            registry.add(prefix + "predicates[0]", () -> "Path=" + r[1]);
         }
     }
 

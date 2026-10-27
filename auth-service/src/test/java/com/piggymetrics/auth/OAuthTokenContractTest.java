@@ -90,6 +90,34 @@ public class OAuthTokenContractTest {
     }
 
     @Test
+    public void serverScopeTokenMayCreateUsers() throws Exception {
+        String token = body(mvc.perform(clientPost("/oauth/token", "contract-secret")
+                .param("grant_type", "client_credentials").param("scope", "server"))
+                .andExpect(status().isOk())).path("access_token").asText();
+        String created = "upgrade-contract-created-" + UUID.randomUUID();
+        try {
+            mvc.perform(post("/users").header("Authorization", "Bearer " + token)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"username\":\"" + created + "\",\"password\":\"contract-password\"}"))
+                    .andExpect(status().isOk());
+        } finally {
+            users.deleteById(created);
+        }
+    }
+
+    @Test
+    public void uiScopeTokenIsForbiddenFromCreatingUsers() throws Exception {
+        String token = body(mvc.perform(passwordRequest("contract-password"))
+                .andExpect(status().isOk())).path("access_token").asText();
+        String attempted = "upgrade-contract-denied-" + UUID.randomUUID();
+        mvc.perform(post("/users").header("Authorization", "Bearer " + token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + attempted + "\",\"password\":\"contract-password\"}"))
+                .andExpect(status().isForbidden());
+        assertFalse(users.findById(attempted).isPresent());
+    }
+
+    @Test
     public void wrongPasswordDoesNotIssueToken() throws Exception {
         assertOAuthError(mvc.perform(passwordRequest("wrong-password"))
                 .andExpect(status().isBadRequest()), "invalid_grant");
