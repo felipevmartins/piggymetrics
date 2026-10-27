@@ -1,4 +1,4 @@
-FROM eclipse-temurin:8-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 MAINTAINER Chi Dov <d.chiproeng@gmail.com>
 
 ADD ./target/turbine-stream-service.jar /app/

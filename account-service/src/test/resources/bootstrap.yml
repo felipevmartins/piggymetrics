@@ -13,3 +13,15 @@ hystrix:
   stream:
     queue:
       enabled: false
+
+# Explicit local fixture for contexts with Config Server disabled. Never used in production.
+security:
+  oauth2:
+    resource:
+      user-info-uri: http://127.0.0.1:1/users/current
+    client:
+      clientId: account-service
+      clientSecret: contract-secret
+      accessTokenUri: http://127.0.0.1:1/oauth/token
+      grant-type: client_credentials
+      scope: server

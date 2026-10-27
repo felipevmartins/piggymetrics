@@ -22,13 +22,13 @@ public class StatisticsController {
 		return statisticsService.findByAccountName(principal.getName());
 	}
 
-	@PreAuthorize("#oauth2.hasScope('server') or #accountName.equals('demo')")
+	@PreAuthorize("hasAuthority('SCOPE_server') or #accountName.equals('demo')")
 	@RequestMapping(value = "/{accountName}", method = RequestMethod.GET)
 	public List<DataPoint> getStatisticsByAccountName(@PathVariable String accountName) {
 		return statisticsService.findByAccountName(accountName);
 	}
 
-	@PreAuthorize("#oauth2.hasScope('server')")
+	@PreAuthorize("hasAuthority('SCOPE_server')")
 	@RequestMapping(value = "/{accountName}", method = RequestMethod.PUT)
 	public void saveAccountStatistics(@PathVariable String accountName, @Valid @RequestBody Account account) {
 		statisticsService.save(accountName, account);

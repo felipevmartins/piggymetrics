@@ -1,4 +1,4 @@
-FROM eclipse-temurin:8-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 MAINTAINER Alexander Lukyanchikov <sqshq@sqshq.com>
 
 ADD ./target/monitoring.jar /app/

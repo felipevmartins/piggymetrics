@@ -13,3 +13,9 @@ hystrix:
   stream:
     queue:
       enabled: false
+
+# Explicit local fixture when Config Server is disabled; production keeps its configured userinfo URI.
+security:
+  oauth2:
+    resource:
+      user-info-uri: http://127.0.0.1:1/users/current

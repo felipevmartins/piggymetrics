@@ -1,34 +1,41 @@
 package com.piggymetrics.notification.config;
 
-import feign.RequestInterceptor;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.cloud.security.oauth2.client.feign.OAuth2FeignRequestInterceptor;
+import com.piggymetrics.notification.service.security.LegacyUserInfoOpaqueTokenIntrospector;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.client.DefaultOAuth2ClientContext;
-import org.springframework.security.oauth2.client.OAuth2RestTemplate;
-import org.springframework.security.oauth2.client.token.grant.client.ClientCredentialsResourceDetails;
-import org.springframework.security.oauth2.config.annotation.web.configuration.EnableResourceServer;
-import org.springframework.security.oauth2.config.annotation.web.configuration.ResourceServerConfigurerAdapter;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.server.resource.BearerTokenErrors;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import java.util.Collections;
+import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 
-/**
- * @author cdov
- */
 @Configuration
-@EnableResourceServer
-public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
-    @Bean
-    @ConfigurationProperties(prefix = "security.oauth2.client")
-    public ClientCredentialsResourceDetails clientCredentialsResourceDetails() {
-        return new ClientCredentialsResourceDetails();
-    }
-    @Bean
-    public RequestInterceptor oauth2FeignRequestInterceptor(){
-        return new OAuth2FeignRequestInterceptor(new DefaultOAuth2ClientContext(), clientCredentialsResourceDetails());
-    }
+@EnableConfigurationProperties(LegacyUserInfoProperties.class)
+public class ResourceServerConfig extends WebSecurityConfigurerAdapter {
+    private final LegacyUserInfoProperties properties;
+
+    public ResourceServerConfig(LegacyUserInfoProperties properties) { this.properties = properties; }
 
     @Bean
-    public OAuth2RestTemplate clientCredentialsRestTemplate() {
-        return new OAuth2RestTemplate(clientCredentialsResourceDetails());
+    public OpaqueTokenIntrospector opaqueTokenIntrospector() {
+        return new LegacyUserInfoOpaqueTokenIntrospector(properties);
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
+                .authorizeRequests().anyRequest().authenticated().and()
+                .oauth2ResourceServer().bearerTokenResolver(request -> {
+                    if (Collections.list(request.getHeaders("Authorization")).size() > 1) {
+                        throw new OAuth2AuthenticationException(BearerTokenErrors.invalidRequest(
+                                "Multiple Authorization headers are not accepted"));
+                    }
+                    return new DefaultBearerTokenResolver().resolve(request);
+                }).opaqueToken().introspector(opaqueTokenIntrospector());
     }
 }
