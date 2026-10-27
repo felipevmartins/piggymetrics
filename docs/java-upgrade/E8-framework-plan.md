@@ -153,3 +153,32 @@ Estado: `concluida` (2026-10-27).
 - F1b (`pendente`): remover monitoring e turbine-stream-service, adicionar Prometheus/Grafana com nomes reais de metricas do endpoint e expor metricas Resilience4j. Auth e gateway ainda tem o stream Hystrix (gateway/Zuul sai na F4).
 - A execucao surefire `isolated-resilience` (reuseForks=false) do account-service foi mantida; reavaliar se ainda e necessaria sem estado estatico de Ribbon/Archaius/Hystrix.
 - Retorno: nao ensaiado. Tag `f0-final` e imagens `:f0` existem.
+
+## F2 - Boot 2.7.18 / Cloud 2021.0.9, bytecode 11
+
+Estado: `bloqueada` (2026-10-27) - entrada registrada, edicao nao iniciada; aguarda decisao sobre os modulos Netflix removidos do train.
+
+### Entrada
+- Revisao f2bab33 (F1 concluida), arvore limpa, 113 testes, bytecode 52. Runtime e build Temurin 21.0.13.
+
+### Matriz (alvo)
+| Item | Origem | Alvo |
+| --- | --- | --- |
+| Spring Boot | 2.3.12.RELEASE | 2.7.18 |
+| Spring Cloud | Hoxton.SR12 | 2021.0.9 (openfeign/config/gateway 3.1.9, circuitbreaker 2.1.8, bus 3.1.3, sleuth 3.1.10, netflix 3.1.8, commons 3.1.8, stream 3.2.10; lidos no POM do BOM) |
+| Bytecode | 8 (major 52) | 11 (major 55) |
+| Namespace | javax | javax (jakarta so na F3) |
+
+### Fontes oficiais lidas (2026-10-27)
+- Boot 2.7.18, requisitos: "requires Java 8 and is compatible up to and including Java 21. Spring Framework 5.3.31 or above" (https://docs.spring.io/spring-boot/docs/2.7.18/reference/html/getting-started.html#getting-started.system-requirements). Decisao: Java 21 de runtime/build e suportado no alvo.
+- Notas do Boot 2.7 (https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-2.7-Release-Notes): `WebSecurityConfigurerAdapter` depreciado (Security 5.7) em favor de bean `SecurityFilterChain`; `spring.data.mongodb.uri` vence host/porta; registro de auto-configuracao migra para `.imports` (spring.factories ainda lido); `@SpringBootTest` properties passam a vencer args de linha de comando.
+- Compatibilidade do train (https://spring.io/projects/spring-cloud): 2021.0.x aceita Boot 2.6.x e 2.7.x (2.7 a partir de 2021.0.3); train marcado como fim de vida (sem suporte), coerente com o plano de degrau diagnostico.
+- Notas do Cloud 2021.0 (wiki spring-cloud-release): cobre ate 2021.0.8; 2021.0.9 nao tem pagina, versoes lidas no POM do BOM em Maven Central (200 para `spring-cloud-dependencies:2021.0.9` e `spring-boot-starter-parent:2.7.18`).
+
+### Achados que bloqueiam
+1. O BOM `spring-cloud-netflix-dependencies:3.1.8` so contem Eureka (client/server) e Archaius. Nao ha `spring-cloud-starter-netflix-zuul` (ultimo 2.2.10.RELEASE), hystrix-dashboard nem turbine-stream. Afeta `gateway` (Zuul), `monitoring` (Hystrix Dashboard) e `turbine-stream-service`.
+2. `spring-cloud-starter-oauth2` (auth-service) nao esta no BOM 2021.0.9 (ultimo 2.2.5.RELEASE, Hoxton). Precisaria de versao fixada fora do train; compatibilidade com Boot 2.7/Security 5.7 nao verificada em fonte oficial.
+3. O plano previa Gateway Server WebMVC so na F4; o Spring Cloud Gateway 3.1.9 do train 2021.0 e reativo (WebFlux), nao servlet.
+
+### Decisao pendente
+Como tratar gateway, monitoring/turbine e auth-service antes de subir o train (opcoes enviadas ao usuario).
