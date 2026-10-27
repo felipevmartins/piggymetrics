@@ -289,3 +289,5 @@ Compose local (imagens construidas dos JARs Java 21, base eclipse-temurin:21-jre
 Retorno: auth-service testes em JDK 11 com o pin do JAXB: 15 testes, exit 0. Rollback de imagens/dados nao ensaiado; containers locais pre-existentes foram recriados pelo `up -d` (volumes/dados locais de teste, nao compartilhados). Imagens locais tagueadas sqshq/piggymetrics-*.
 
 Conclusao: build aprovado, testes aprovados (Linux, JDK 21.0.13) e fluxos representativos validados no compose local, exceto cambio externo. Pendencias: Windows 21 com o pin, Mongo 3 e Boot 2.3 EOL, bytecode 8, shutdown forcado de forks preexistente, nenhuma publicacao/deploy.
+
+Teste do bytecode (2026-10-27): `mvn clean test -Djava.version=21` no gateway gerou classes major 65 e o teste de contexto falhou com `Unsupported class file major version 65` (ASM do Spring Framework 5.2, Boot 2.3.12). Hipotese confirmada: com Boot 2.3 o bytecode precisa permanecer 1.8 (ou ate 15 no maximo documentado); elevar `java.version` exige subir Spring Framework/Boot. Gateway reconstruido com bytecode 52, verify aprovado.
