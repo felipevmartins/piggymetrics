@@ -176,7 +176,7 @@ public interface StatisticsServiceClient {
 
 ### Monitor dashboard
 
-In this project configuration, each microservice with Hystrix on board pushes metrics to Turbine via Spring Cloud Bus (with AMQP broker). The Monitoring project is just a small Spring boot application with the [Turbine](https://github.com/Netflix/Turbine) and [Hystrix Dashboard](https://github.com/Netflix-Skunkworks/hystrix-dashboard).
+Circuit breakers are now Spring Cloud CircuitBreaker (Resilience4j). Account, Statistics and Notification services expose Micrometer metrics at `/actuator/prometheus` on the management port 9100 (reachable only inside the compose network). Prometheus scrapes them and Grafana shows the `PiggyMetrics circuit breakers` dashboard (state, failure rate, calls per result). The former Hystrix Dashboard and Turbine modules were removed; the screenshots and the Hystrix text below describe the original setup.
 
 Let's see observe the behavior of our system under load: Statistics Service imitates a delay during the request processing. The response timeout is set to 1 second:
 
@@ -247,7 +247,8 @@ If you'd like to start applications in Intellij Idea you need to either use [Env
 #### Important endpoints
 - http://localhost:80 - Gateway
 - http://localhost:8761 - Eureka Dashboard
-- http://localhost:9000/hystrix - Hystrix Dashboard (Turbine stream link: `http://turbine-stream-service:8080/turbine/turbine.stream`)
+- http://localhost:9090 - Prometheus
+- http://localhost:3000 - Grafana (default login/password: admin/admin)
 - http://localhost:15672 - RabbitMq management (default login/password: guest/guest)
 
 ## Contributions are welcome!

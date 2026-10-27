@@ -17,3 +17,10 @@ security:
 spring:
   rabbitmq:
     host: rabbitmq
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

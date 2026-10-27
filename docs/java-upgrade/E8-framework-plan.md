@@ -182,3 +182,48 @@ Estado: `bloqueada` (2026-10-27) - entrada registrada, edicao nao iniciada; agua
 
 ### Decisao pendente
 Como tratar gateway, monitoring/turbine e auth-service antes de subir o train (opcoes enviadas ao usuario).
+
+### Decisoes do usuario para destravar a F2 (2026-10-27)
+- Gateway: Zuul -> Spring Cloud Gateway reativo dentro da F2.
+- Monitoring/Turbine: fazer a F1b antes da F2 (D2).
+- Auth: fixar `spring-cloud-starter-oauth2` 2.2.5 fora do BOM na F2 e validar por testes de login; Spring Authorization Server na F3.
+- Estado da F2 passa a `pendente` ate o fim da F1b.
+
+## F1b - Remover Hystrix Dashboard/Turbine, metricas por Actuator/Prometheus/Grafana
+
+Estado: `concluida` (2026-10-27).
+
+### Entrada
+- Revisao 2bd82ae (F1 concluida). Bytecode 52, Boot 2.3.12 / Hoxton.SR12, Temurin 21.0.13.
+
+### Matriz
+Sem mudanca de versao de framework/JDK. Modulos removidos: `monitoring`, `turbine-stream-service`. Adicionados: `micrometer-registry-prometheus` (versao gerenciada pelo Boot 2.3.12) nos tres servicos cliente; servicos `prometheus` e `grafana` no compose (imagens fixadas apos leitura da fonte).
+
+### Fontes oficiais
+Ja registradas em D2 (Spring Cloud CircuitBreaker "Collecting Metrics", Resilience4j Micrometer/Grafana). Nomes de series so serao documentados depois de lidos em `/actuator/prometheus` real.
+
+### Mudanca pretendida
+1. Remover os dois modulos (pom raiz, Dockerfile, compose, `.travis.yml`, configs compartilhadas, README). Os 2 testes de contexto desses modulos saem com os modulos: remocao deliberada, nao enfraquecimento (compare_surefire deve listar exatamente esses 2 como removidos).
+2. Expor `/actuator/prometheus` com acesso restrito a rede do compose (decisao de seguranca registrada na execucao).
+3. Prometheus + Grafana no compose; nao publicar portas sem necessidade alem das de uso local.
+
+### Saida (gates)
+`mvn -B -ntp clean verify` exit 0; `check_bytecode.py 52`; `compare_surefire.py`: removidos = 2 (os dos modulos eliminados), 0 nao aprovados; stack sobe sem os dois servicos; `/actuator/prometheus` mostra series `resilience4j_circuitbreaker_*` reais apos uma chamada; Grafana le o Prometheus.
+
+### Recuperacao
+`git revert` do commit da F1b; imagens `monitoring`/`turbine-stream-service` anteriores continuam locais.
+
+### Resultado F1b (2026-10-27)
+- `mvn -B -ntp clean verify` no codigo final: exit 0, 8 modulos SUCCESS, 111 testes, 0 falhas, 0 ignorados. `check_bytecode.py 52`: ok.
+- `compare_surefire.py` (baseline E4g): before=110 after=111 removed=2 added=3 not_passed=0, `ok=False` so por causa dos 2 removidos. Remocao deliberada: `MonitoringApplicationTests#contextLoads` e `TurbineStreamServiceApplicationTests#contextLoads` (modulos eliminados). Os 3 adicionados sao os contratos da F0.
+- Stack: `/actuator/prometheus` na porta de gerenciamento 9100 de account, statistics e notification; Prometheus v2.55.1 com os 3 alvos `up`; Grafana 11.3.0 com datasource e dashboard provisionados (`observability/`) lendo o Prometheus. Series reais conferidas no endpoint: `resilience4j_circuitbreaker_state{state=...}`, `resilience4j_circuitbreaker_failure_rate`, `resilience4j_circuitbreaker_calls_seconds_{count,sum,max}{kind=successful|failed|ignored}`, com `name`/`group` = `StatisticsServiceClient#updateStatistics(String,Account)`. `resilience4j-micrometer` 1.7.0 ja vem transitivo do starter. Estado observado: `closed`; `failure_rate` -1 sem amostra minima.
+- Seguranca: o filtro dos servicos tambem cobre a porta 9100, entao `EndpointRequest.to("prometheus")` foi liberado so para o endpoint de metricas nas tres `ResourceServerConfig`. A porta 9100 nao e publicada no host (conferido: `localhost:9100` recusa); na porta de negocio `/accounts/actuator/prometheus` continua 401. Sem teste automatizado dedicado a essa regra: lacuna registrada.
+- Observacao: logo apos reiniciar o account-service, um `PUT` via gateway devolveu 500 uma vez (instancia ainda nao registrada no Eureka/Zuul); repetido depois, 200.
+
+### Mudancas deliberadas F1b
+- Modulos `monitoring` e `turbine-stream-service` removidos (pom, compose, `.travis.yml`, configs compartilhadas, README); portas 9000 e 8989 deixam de existir; compose ganha Prometheus (9090) e Grafana (3000).
+- Dashboards do Hystrix deixam de existir; o dashboard Grafana proprio usa so series conferidas.
+
+### Pendencias F1b
+- Teste automatizado da regra do endpoint `prometheus`; alertas nao criados.
+- Dashboard nao validado visualmente em navegador (apenas via API do Grafana).

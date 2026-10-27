@@ -1,6 +1,7 @@
 package com.piggymetrics.account.config;
 
 import com.piggymetrics.account.service.security.LegacyUserInfoOpaqueTokenIntrospector;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +30,8 @@ public class ResourceServerConfig extends WebSecurityConfigurerAdapter {
     protected void configure(HttpSecurity http) throws Exception {
         http.csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
-                .authorizeRequests().antMatchers("/", "/demo").permitAll()
+                .authorizeRequests().requestMatchers(EndpointRequest.to("prometheus")).permitAll()
+                .antMatchers("/", "/demo").permitAll()
                 .anyRequest().authenticated().and()
                 .oauth2ResourceServer().bearerTokenResolver(request -> {
                     if (Collections.list(request.getHeaders("Authorization")).size() > 1) {
