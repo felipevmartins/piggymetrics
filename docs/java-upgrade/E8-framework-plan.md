@@ -156,7 +156,7 @@ Estado: `concluida` (2026-10-27).
 
 ## F2 - Boot 2.7.18 / Cloud 2021.0.9, bytecode 11
 
-Estado: `bloqueada` (2026-10-27) - entrada registrada, edicao nao iniciada; aguarda decisao sobre os modulos Netflix removidos do train.
+Estado: `em_execucao` (2026-10-27). Bloqueios resolvidos por decisao do usuario (abaixo) e pela F1b (7724fc0).
 
 ### Entrada
 - Revisao f2bab33 (F1 concluida), arvore limpa, 113 testes, bytecode 52. Runtime e build Temurin 21.0.13.
@@ -180,8 +180,8 @@ Estado: `bloqueada` (2026-10-27) - entrada registrada, edicao nao iniciada; agua
 2. `spring-cloud-starter-oauth2` (auth-service) nao esta no BOM 2021.0.9 (ultimo 2.2.5.RELEASE, Hoxton). Precisaria de versao fixada fora do train; compatibilidade com Boot 2.7/Security 5.7 nao verificada em fonte oficial.
 3. O plano previa Gateway Server WebMVC so na F4; o Spring Cloud Gateway 3.1.9 do train 2021.0 e reativo (WebFlux), nao servlet.
 
-### Decisao pendente
-Como tratar gateway, monitoring/turbine e auth-service antes de subir o train (opcoes enviadas ao usuario).
+### Decisao (usuario, 2026-10-27)
+Gateway reativo (Spring Cloud Gateway 3.1.9) na F2; F1b antes (feita); `spring-cloud-starter-oauth2` 2.2.5 fixado fora do BOM.
 
 ### Decisoes do usuario para destravar a F2 (2026-10-27)
 - Gateway: Zuul -> Spring Cloud Gateway reativo dentro da F2.
@@ -227,3 +227,16 @@ Ja registradas em D2 (Spring Cloud CircuitBreaker "Collecting Metrics", Resilien
 ### Pendencias F1b
 - Teste automatizado da regra do endpoint `prometheus`; alertas nao criados.
 - Dashboard nao validado visualmente em navegador (apenas via API do Grafana).
+
+### Mudanca pretendida (F2)
+1. Pom raiz: Boot 2.7.18, Cloud 2021.0.9, `java.version` 11 (`release` 11; major 55).
+2. Bootstrap deixa de ser padrao no Cloud 2020.0+: adicionar `spring-cloud-starter-bootstrap` onde ha `bootstrap.yml` (a troca por `spring.config.import` fica para a F3).
+3. gateway: Zuul -> Spring Cloud Gateway 3.1.9 (WebFlux) com as mesmas rotas e prefixos (`/uaa/**` URL interna, demais `lb://`), timeouts de 20 s, cookies e Authorization repassados como no Zuul (`sensitiveHeaders` vazio); `spring-cloud-starter-loadbalancer`; estaticos do gateway servidos pelo WebFlux.
+4. auth-service: `spring-cloud-starter-oauth2` 2.2.5 com versao explicita; `WebSecurityConfigurerAdapter` permanece (depreciado, nao removido no 2.7); validar login por testes.
+5. Depreciacoes/propriedades do Boot 2.7 tratadas conforme aparecerem; nada de migracao `jakarta`.
+
+### Saida (gates) F2
+`mvn -B -ntp clean verify` exit 0 (JDK 21); `check_bytecode.py 55`; `compare_surefire.py` contra a baseline: removidos so os 2 da F1b, 0 nao aprovados; contratos de roteamento do gateway cobertos por teste novo (caracterizacao legado antes de remover o Zuul); stack reconstruida: login (password grant legado), cadastro, PUT account -> statistics, rotas do gateway e metricas Prometheus observados.
+
+### Recuperacao F2
+`git revert` dos commits da F2; tag `f1b-final` e imagens `:f1b` guardadas antes de reconstruir. Sem mudanca de dados/esquema.
