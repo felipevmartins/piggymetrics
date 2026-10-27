@@ -79,3 +79,15 @@ Cada etapa em branch/commit proprio com JARs, imagens e configuracao anteriores 
 ## Proximo alvo: Java 25
 
 Boot 4.1 declara compatibilidade ate Java 27 (fonte acima), entao o salto 21 para 25 deve ser mais simples depois de F5. Antes, preparar a skill: ampliar tabela de transicoes (21 para 25), fontes oficiais do JDK 25, e validar no piloto. Nao iniciado.
+
+## F0 - fechamento (2026-10-27)
+
+Estado: concluida, com limites. Reactor Linux, Temurin 21.0.13, `mvn -B -ntp clean verify`: exit 0, 9 modulos SUCCESS, 113 testes. `compare_surefire.py` contra a baseline E4g (110): 0 removidos, 3 adicionados, 0 nao aprovados.
+
+Entregue:
+- `tools/check_bytecode.py MAJOR`: gate de bytecode; com 52 passa nos 16 conjuntos (main e test de 9 modulos), com 65 reprova, como esperado.
+- `StatisticsServiceClientResilienceContractTest` (2 testes): balanceamento round robin por nome (Ribbon sem Eureka, 3/3 em 6 chamadas) e timeout Hystrix de 1500 ms com fallback sem excecao e latencia limitada.
+- `StatisticsServiceClientDeadServerContractTest` (1 teste): com uma porta recusando conexao na lista, as chamadas nao lancam excecao e so 3 de 6 chegam ao servidor vivo (sem retry no proximo servidor). Uma substituicao que faca retry muda esse contrato e deve atualizar o valor junto com este plano.
+- `account-service/pom.xml`: segunda execucao do Surefire (`isolated-resilience`) com `reuseForks=false` para essas duas classes. Ribbon, Archaius e Hystrix mantem estado estatico na JVM (circuitos abertos por testes de 503 e listas de servidores) e quebravam o balanceamento por nome quando outro contexto Spring rodava antes. Isolar todo o modulo custaria 8m30 contra 4m38 atuais.
+
+Nao coberto (a tratar no inicio da F1, junto do desenho de metricas): Spring Cloud Bus/RabbitMQ, stream `hystrix.stream` (o endpoint de actuator responde 401 sem credencial na stack real), Hystrix no `notification-service`, login completo alem do `OAuthTokenContractTest` existente, Windows em Java 21.

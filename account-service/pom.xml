@@ -97,6 +97,35 @@
 				</configuration>
 			</plugin>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>**/StatisticsServiceClientResilienceContractTest.java</exclude>
+						<exclude>**/StatisticsServiceClientDeadServerContractTest.java</exclude>
+					</excludes>
+				</configuration>
+				<executions>
+					<!-- Ribbon, Archaius and Hystrix keep JVM-static state (circuits, server lists) that leaks between
+					     Spring contexts; the name-based balancing characterization runs with one JVM per class. -->
+					<execution>
+						<id>isolated-resilience</id>
+						<phase>test</phase>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration>
+							<excludes combine.self="override"/>
+							<includes>
+								<include>**/StatisticsServiceClientResilienceContractTest.java</include>
+								<include>**/StatisticsServiceClientDeadServerContractTest.java</include>
+							</includes>
+							<reuseForks>false</reuseForks>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>${jacoco.version}</version>
