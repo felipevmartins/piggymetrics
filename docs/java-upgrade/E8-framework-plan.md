@@ -527,3 +527,7 @@ Recuperacao: `git revert` dos commits F6b, tag `f5-final`, imagens `:f4`.
 
 ### Resultado F6b passo 1 (jacoco 0.8.14, release 21, GraalVM CE 25.0.2)
 `mvn -B -ntp -fae clean verify` BUILD SUCCESS; zero linhas `Unsupported class file major version`; `compare_surefire.py` vs `after7`: ver commit. Hipotese do JaCoCo confirmada para este projeto (erro some ao trocar so a versao).
+
+### Resultado F6b passo 2 (java.version 25, GraalVM CE 25.0.2)
+`mvn -B -ntp -fae clean verify` BUILD SUCCESS (worktree limpo em 4227b2a + `java.version` 25); `check_bytecode.py 69` ok em todos os modulos (classes e test-classes major 69); `compare_surefire.py` vs `after7` (HEAD sem a pagina de login): before=119 after=119 removed=0 added=0 not_passed=0. Zero `Unsupported class file major version`.
+Observado: aviso JEP 472 "restricted method in java.lang.System ... loadLibrary ... io.netty.util.internal.NativeLibraryUtil" (Netty 4.2.19, tambem com release 21 no JDK 25); `--enable-native-access=ALL-UNNAMED` o silenciaria, nao aplicado (aviso, nao falha; decidir se vale na entrega). Aviso do agente dinamico do Byte Buddy/Mockito persiste. Falta: imagens, stack, fluxos, retorno.
