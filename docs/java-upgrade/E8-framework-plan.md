@@ -397,3 +397,15 @@ F4m: `mongodb/Dockerfile` em `mongo:8.0`; `mongo` shell removido a partir do 6.0
 - `org.hibernate.validator.constraints.Email` (removida) -> `jakarta.validation.constraints.Email` em `Recipient`.
 - Pacotes de slices de teste novos (`webmvc.test.autoconfigure`, `data.mongodb.test.autoconfigure`), `@MockBean` -> `@MockitoBean`, `spring.data.mongodb.*` -> `spring.mongodb.*`, `EndpointRequest` em `org.springframework.boot.security.autoconfigure.actuate.web.servlet`, `OAuth2AuthorizationServerConfigurer` instanciado diretamente (o metodo estatico `authorizationServer()` nao existe no Security 7).
 - Cliente de token OAuth sem repeticao automatica (JDK HttpClient) por contrato de teste: uma tentativa por chamada.
+
+### Resultado F4m (2026-10-27)
+- Servidor: `mongodb/Dockerfile` em `mongo:8.0` (8.0.34 observado); volumes novos (os de 4.4 foram descartados com `rm -sfv`; 8.0 nao abre dados 4.4 sem passar por 5.0/6.0/7.0).
+- `init.sh`: `mongo` -> `mongosh` (criacao do usuario e execucao do `INIT_DUMP`). Dockerfile: `--force-yes` removido do apt e `-y` no `dos2unix`.
+- Dump: `db.accounts.update(doc, {upsert:true})` e rejeitado pelo `mongosh` ("Update document requires atomic operators"; o loop de retry repetia indefinidamente); trocado por `replaceOne` com o mesmo filtro, documento e `upsert`. Conteudo do documento `demo` conferido apos o restore.
+- Testes: `piggymetrics.test.mongo-image` padrao `mongo:8.0` nos 4 modulos; `clean verify` verde (119 testes, `compare_surefire.py` contra after4: removed=0 added=0 not_passed=0), bytecode 65.
+- Fluxos vivos sobre Mongo 8.0: mesmos da F4a (cadastro, login code+PKCE, token, accounts/current 200/401/403, PUT 200, notifications 200, rotas); sem erros de conexao Mongo nos 4 servicos; dados persistidos (accounts: demo + usuario do fluxo; users).
+- Imagens `:f4a` guardadas antes da troca do servidor.
+
+### Pendencias F4
+- `exchangeratesapi.io` exige chave: `/statistics/current` vazio e fallback do account logando erro (externo, preexistente).
+- Rollback F4 nao ensaiado; Security 7 migration guide e notas por projeto do Cloud nao lidos (cobertos por falhas reais).

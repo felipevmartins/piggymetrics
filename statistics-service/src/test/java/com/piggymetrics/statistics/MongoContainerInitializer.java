@@ -16,7 +16,7 @@ import org.testcontainers.utility.DockerImageName;
 public class MongoContainerInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
 	private static final GenericContainer<?> MONGO = new GenericContainer<>(
-			DockerImageName.parse(System.getProperty("piggymetrics.test.mongo-image", "mongo:4.4")))
+			DockerImageName.parse(System.getProperty("piggymetrics.test.mongo-image", "mongo:8.0")))
 			.withExposedPorts(27017)
 			.waitingFor(Wait.forListeningPort());
 
