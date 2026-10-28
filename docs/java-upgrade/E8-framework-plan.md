@@ -409,3 +409,25 @@ F4m: `mongodb/Dockerfile` em `mongo:8.0`; `mongo` shell removido a partir do 6.0
 ### Pendencias F4
 - `exchangeratesapi.io` exige chave: `/statistics/current` vazio e fallback do account logando erro (externo, preexistente).
 - Rollback F4 nao ensaiado; Security 7 migration guide e notas por projeto do Cloud nao lidos (cobertos por falhas reais).
+
+## F5 - aceite do destino: imagens, compose completo, fluxos, retorno ensaiado, relatorio final
+
+Estado: `em_execucao` (registrado em 2026-10-28, antes de executar). Sem mudanca de codigo prevista; so evidencias, documentacao e eventuais correcoes que os gates apontarem (cada uma registrada).
+
+### Entrada
+Commit 3e7c6b4 (tag `f4-final`, f6cabc7): Boot 4.1.2, Cloud 2025.1.4, bytecode 21, MongoDB 8.0, 119 testes verdes. Imagens `:f3` e `:f4a` guardadas; as `:latest` atuais (Mongo 8.0) serao marcadas `:f4` antes de qualquer recriacao.
+
+### Matriz (alvo)
+Igual a F4 (Boot 4.1.2, Cloud 2025.1.4, JDK Temurin 21.0.13, `mongo:8.0`, Prometheus v2.55.1, Grafana 11.3.0, RabbitMQ 3-management). Nenhuma versao nova entra na F5.
+
+### Fontes oficiais lidas
+Nenhuma nova; as da F4 permanecem. Comparacao com a baseline original usa os XMLs do E4g (110 testes) citados no HANDOFF.
+
+### Mudanca pretendida
+(1) Comparar as 119 identidades finais com a baseline original e listar adicionadas/removidas/alteradas com motivo. (2) Subir a stack completa a partir de volumes vazios com o compose (imagens reconstruidas) e repetir os fluxos de negocio, inclusive `demo` do dump e conferencia de metricas/traces. (3) Ensaiar o retorno em ambiente isolado: subir as imagens `:f3` (Mongo 4.4, volumes novos) com o compose e repetir o fluxo; depois voltar para `:f4`. (4) Relatorio final com o registro de evidencias da skill e atualizacao do `HANDOFF.md`.
+
+### Saida (gates)
+`compare_surefire.py` contra a baseline original com diferencas explicadas; `clean verify` ja verde em `f4-final` (nao muda); fluxos vivos na stack nova a partir de volumes vazios; retorno `:f3` ensaiado e resultado registrado; build, testes e fluxos separados no relatorio; sem push.
+
+### Recuperacao F5
+Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anterior: tags `f4-final`, `f3-final`, imagens `:f3`/`:f4a`/`:f4`.
