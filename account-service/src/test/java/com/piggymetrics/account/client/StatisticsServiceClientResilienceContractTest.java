@@ -37,7 +37,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
         "clients.statistics-service.url=",
-        "feign.circuitbreaker.enabled=true",
+        "spring.cloud.openfeign.circuitbreaker.enabled=true",
         "piggymetrics.circuit-breaker.timeout=1500ms"})
 public class StatisticsServiceClientResilienceContractTest {
     private static final HttpServer FIRST = startServer("first");
@@ -52,7 +52,7 @@ public class StatisticsServiceClientResilienceContractTest {
 
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
-        registry.add("security.oauth2.client.accessTokenUri", () -> base(FIRST) + "/oauth/token");
+        registry.add("security.oauth2.client.accessTokenUri", () -> base(FIRST) + "/oauth2/token");
         registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[0].uri", () -> base(FIRST));
         registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[1].uri", () -> base(SECOND));
     }
@@ -114,7 +114,7 @@ public class StatisticsServiceClientResilienceContractTest {
             server.createContext("/", exchange -> {
                 drain(exchange.getRequestBody());
                 String path = exchange.getRequestURI().getPath();
-                if (path.equals("/oauth/token")) {
+                if (path.equals("/oauth2/token")) {
                     byte[] body = "{\"access_token\":\"t\",\"token_type\":\"bearer\",\"expires_in\":3600,\"scope\":\"server\"}"
                             .getBytes(StandardCharsets.UTF_8);
                     exchange.getResponseHeaders().add("Content-Type", "application/json");

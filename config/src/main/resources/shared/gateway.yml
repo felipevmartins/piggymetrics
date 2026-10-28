@@ -1,26 +1,29 @@
 spring:
   cloud:
     gateway:
-      httpclient:
-        connect-timeout: 20000
-        response-timeout: 20s
-      routes:
-        - id: auth-service
-          uri: http://auth-service:5000
-          predicates:
-            - Path=/uaa/**
-        - id: account-service
-          uri: lb://account-service
-          predicates:
-            - Path=/accounts/**
-        - id: statistics-service
-          uri: lb://statistics-service
-          predicates:
-            - Path=/statistics/**
-        - id: notification-service
-          uri: lb://notification-service
-          predicates:
-            - Path=/notifications/**
+      server:
+        webflux:
+          trusted-proxies: '127\..*|10\..*|192\.168\..*|172\.(1[6-9]|2[0-9]|3[01])\..*|0:0:0:0:0:0:0:1|::1'
+          httpclient:
+            connect-timeout: 20000
+            response-timeout: 20s
+          routes:
+            - id: auth-service
+              uri: http://auth-service:5000
+              predicates:
+                - Path=/uaa/**
+            - id: account-service
+              uri: lb://account-service
+              predicates:
+                - Path=/accounts/**
+            - id: statistics-service
+              uri: lb://statistics-service
+              predicates:
+                - Path=/statistics/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/notifications/**
 
 server:
   port: 4000

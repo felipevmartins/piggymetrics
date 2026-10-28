@@ -5,7 +5,7 @@ import com.piggymetrics.account.domain.Account;
 import com.piggymetrics.account.domain.Currency;
 import com.piggymetrics.account.domain.Saving;
 import com.piggymetrics.account.repository.AccountRepository;
-import com.piggymetrics.account.config.LegacyUserInfoProperties;
+import com.piggymetrics.account.config.OpaqueTokenIntrospectionProperties;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.*;
 import org.junit.runner.RunWith;
@@ -32,11 +32,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(properties = "feign.circuitbreaker.enabled=true")
+@SpringBootTest(properties = "spring.cloud.openfeign.circuitbreaker.enabled=true")
 @AutoConfigureMockMvc
 public class AccountBearerContractTest {
     private static final AtomicInteger USERINFO_CALLS = new AtomicInteger();
     private static final AtomicInteger REDIRECT_CALLS = new AtomicInteger();
+    private static final List<String> CLIENT_AUTHORIZATIONS = new CopyOnWriteArrayList<>();
     private static final List<String> USERINFO_HEADERS = new CopyOnWriteArrayList<>();
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(r -> {
         Thread thread = new Thread(r, "userinfo-contract"); thread.setDaemon(true); return thread;
@@ -56,10 +57,10 @@ public class AccountBearerContractTest {
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String base = "http://127.0.0.1:" + SERVER.getAddress().getPort();
-        registry.add("security.oauth2.resource.user-info-uri", () -> base + "/userinfo");
+        registry.add("security.oauth2.resource.introspection-uri", () -> base + "/oauth2/introspect");
         registry.add("security.oauth2.resource.read-timeout-millis", () -> 500);
         registry.add("security.oauth2.resource.max-response-bytes", () -> 1024);
-        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth/token");
+        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth2/token");
         registry.add("clients.auth-service.url", () -> base);
         registry.add("clients.statistics-service.url", () -> base);
     }
@@ -72,7 +73,7 @@ public class AccountBearerContractTest {
         accounts.save(account(other, "other-original"));
         accounts.save(account("account-service", "service-original"));
         responseOverride = null; responseStatus = 200;
-        USERINFO_CALLS.set(0); REDIRECT_CALLS.set(0); USERINFO_HEADERS.clear();
+        USERINFO_CALLS.set(0); REDIRECT_CALLS.set(0); USERINFO_HEADERS.clear(); CLIENT_AUTHORIZATIONS.clear();
         slowBody = new CountDownLatch(0);
     }
 
@@ -94,6 +95,9 @@ public class AccountBearerContractTest {
         mvc.perform(get("/current").header("Authorization", "Bearer service-server"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("account-service"));
         assertEquals(Arrays.asList("Bearer user-ui", "Bearer service-server"), USERINFO_HEADERS);
+        String client = "Basic " + java.util.Base64.getEncoder().encodeToString(
+                "account-service:contract-secret".getBytes(StandardCharsets.UTF_8));
+        assertEquals(Arrays.asList(client, client), CLIENT_AUTHORIZATIONS);
     }
 
     @Test
@@ -167,11 +171,12 @@ public class AccountBearerContractTest {
     public void malformedProfilesNeverBecomeUnknownOrPrivilegedAuthentication() throws Exception {
         String valid = profile(owner, "browser", "ui");
         List<String> invalid = Arrays.asList("not-json", "[]", "{\"error\":\"invalid_token\"}",
-                valid.replace("\"name\":\"" + owner + "\"", "\"name\":\"\""),
-                valid.replace("\"clientId\":\"browser\"", "\"clientId\":{}"),
-                valid.replace("[\"ui\"]", "[42]"), valid.replace("[\"ui\"]", "[]"),
-                valid.replace("[\"ui\"]", "[\" \" ]"),
-                valid.replace(",\"scope\":[\"ui\"]", ""), valid + "{}");
+                valid.replace("\"sub\":\"" + owner + "\"", "\"sub\":\"\""),
+                valid.replace("\"client_id\":\"browser\"", "\"client_id\":{}"),
+                valid.replace("\"scope\":\"ui\"", "\"scope\":42"), valid.replace("\"scope\":\"ui\"", "\"scope\":\"\""),
+                valid.replace("\"scope\":\"ui\"", "\"scope\":\" \""),
+                valid.replace(",\"scope\":\"ui\"", ""), valid.replace("\"active\":true", "\"active\":false"),
+                valid.replace("\"active\":true,", ""), valid + "{}");
         for (String body : invalid) {
             responseOverride = body;
             mvc.perform(get("/current").header("Authorization", "Bearer user-ui"))
@@ -205,9 +210,10 @@ public class AccountBearerContractTest {
     @Test
     public void unsafeEndpointNonpositiveTimeoutAndOversizedLimitAreRejected() {
         for (String bad : Arrays.asList("userinfo", "timeout", "limit")) {
-            LegacyUserInfoProperties p = new LegacyUserInfoProperties();
-            p.setUserInfoUri("http://127.0.0.1/userinfo");
-            if (bad.equals("userinfo")) p.setUserInfoUri("http://user:secret-marker@localhost/userinfo");
+            OpaqueTokenIntrospectionProperties p = new OpaqueTokenIntrospectionProperties();
+            p.setClientId("account-service"); p.setClientSecret("contract-secret");
+            p.setIntrospectionUri("http://127.0.0.1/oauth2/introspect");
+            if (bad.equals("userinfo")) p.setIntrospectionUri("http://user:secret-marker@localhost/oauth2/introspect");
             if (bad.equals("timeout")) p.setReadTimeoutMillis(0);
             if (bad.equals("limit")) p.setMaxResponseBytes(Integer.MAX_VALUE);
             try { p.validatedUri(); fail("Unsafe userinfo settings must fail"); }
@@ -216,13 +222,16 @@ public class AccountBearerContractTest {
     }
 
     private static String profile(String name, String client, String scope) {
-        return "{\"name\":\"" + name + "\",\"oauth2Request\":{\"clientId\":\"" + client
-                + "\",\"scope\":[\"" + scope + "\"]}}";
+        return "{\"active\":true,\"sub\":\"" + name + "\",\"client_id\":\"" + client
+                + "\",\"scope\":\"" + scope + "\"}";
     }
     private Account account(String name, String note) {
         Account a = new Account(); a.setName(name); a.setNote(note);
         Saving s = new Saving(); s.setAmount(BigDecimal.ZERO); s.setCurrency(Currency.USD);
         s.setInterest(BigDecimal.ZERO); s.setDeposit(false); s.setCapitalization(false); a.setSaving(s); return a;
+    }
+    private static void assertIntrospectionRequest(com.sun.net.httpserver.HttpExchange exchange) {
+        if (!"POST".equals(exchange.getRequestMethod())) throw new AssertionError("Introspection must be POST");
     }
     private static HttpServer startServer() {
         try {
@@ -231,9 +240,18 @@ public class AccountBearerContractTest {
             server.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath();
                 String body = ""; int status = 200;
-                if (path.equals("/userinfo")) {
+                String submittedToken = "";
+                if (path.equals("/oauth2/introspect")) {
+                    String form = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                    for (String pair : form.split("&")) {
+                        if (pair.startsWith("token=")) submittedToken = java.net.URLDecoder.decode(pair.substring(6), "UTF-8");
+                    }
+                }
+                if (path.equals("/oauth2/introspect")) {
                     USERINFO_CALLS.incrementAndGet();
-                    String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+                    CLIENT_AUTHORIZATIONS.add(String.valueOf(exchange.getRequestHeaders().getFirst("Authorization")));
+                    assertIntrospectionRequest(exchange);
+                    String authorization = "Bearer " + submittedToken;
                     USERINFO_HEADERS.add(authorization);
                     status = responseStatus;
                     body = responseOverride != null ? responseOverride
@@ -243,7 +261,7 @@ public class AccountBearerContractTest {
                             "http://localhost:" + server.getAddress().getPort() + "/redirect-target");
                 } else if (path.equals("/redirect-target")) {
                     REDIRECT_CALLS.incrementAndGet(); body = profile(owner, "browser", "ui");
-                } else if (path.equals("/oauth/token")) {
+                } else if (path.equals("/oauth2/token")) {
                     body = "{\"access_token\":\"outbound-service\",\"token_type\":\"bearer\",\"expires_in\":3600,\"scope\":\"server\"}";
                 }
                 exchange.getRequestBody().close();
@@ -251,7 +269,7 @@ public class AccountBearerContractTest {
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 try {
                     exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
-                    if (path.equals("/userinfo")) slowBody.await(5, TimeUnit.SECONDS);
+                    if (path.equals("/oauth2/introspect")) slowBody.await(5, TimeUnit.SECONDS);
                     if (bytes.length > 0) exchange.getResponseBody().write(bytes);
                 } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
                 catch (java.io.IOException disconnectedAfterTimeout) { /* Client may have closed the bounded read. */ }

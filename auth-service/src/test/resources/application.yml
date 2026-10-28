@@ -1,8 +1,13 @@
 spring:
-  mongodb:
-    embedded:
-      version: 3.5.5
-  data:
-    mongodb:
-      database: piggymetrics
-      port: 0
+---
+eureka:
+  client:
+    enabled: false
+
+spring:
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+

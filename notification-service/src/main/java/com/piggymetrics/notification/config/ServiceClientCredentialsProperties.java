@@ -34,7 +34,7 @@ public class ServiceClientCredentialsProperties {
         return ClientRegistration.withRegistrationId("notification-service")
                 .clientId(clientId).clientSecret(clientSecret)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .clientAuthenticationMethod(ClientAuthenticationMethod.BASIC)
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .tokenUri(accessTokenUri).scope(scope).build();
     }
     public String getClientId() { return clientId; }

@@ -15,18 +15,22 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
+import java.security.MessageDigest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
 
 import static org.junit.Assert.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Characterizes legacy behavior through MockMvc; does not endorse password grant for the replacement. */
+/** Characterizes the Spring Authorization Server contract through MockMvc (authorization code + PKCE, client credentials, introspection). */
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = "ACCOUNT_SERVICE_PASSWORD=contract-secret")
 @AutoConfigureMockMvc
@@ -50,48 +54,46 @@ public class OAuthTokenContractTest {
         if (username != null) users.deleteById(username);
     }
 
+    private static final String REDIRECT = "http://localhost/";
+    private static final String VERIFIER = "contract-verifier-0123456789-0123456789-0123456789-abc";
+
     @Test
-    public void browserPasswordTokenCanBeIntrospectedAndRefreshed() throws Exception {
-        JsonNode issued = body(mvc.perform(passwordRequest("contract-password"))
+    public void browserAuthorizationCodeTokenCanBeIntrospected() throws Exception {
+        JsonNode issued = body(mvc.perform(codeExchange(authorizationCode(login("contract-password")), VERIFIER))
                 .andExpect(status().isOk()));
         assertToken(issued, "ui");
+        // Public clients receive no refresh token; the UI never used the one the legacy server issued.
+        assertFalse(issued.has("refresh_token"));
         JsonNode profile = userInfo(issued.path("access_token").asText());
         assertEquals(username, profile.path("name").asText());
-        assertEquals("browser", profile.path("oauth2Request").path("clientId").asText());
-        assertEquals("ui", profile.path("oauth2Request").path("scope").get(0).asText());
-        assertFalse(issued.path("refresh_token").asText().isEmpty());
-        JsonNode checked = body(mvc.perform(clientPost("/oauth/check_token", "contract-secret")
+        JsonNode checked = body(mvc.perform(clientPost("/oauth2/introspect", "contract-secret")
                 .param("token", issued.path("access_token").asText())).andExpect(status().isOk()));
-        assertEquals(username, checked.path("user_name").asText());
+        assertTrue(checked.path("active").asBoolean());
+        assertEquals(username, checked.path("sub").asText());
         assertEquals("browser", checked.path("client_id").asText());
-        assertEquals("ui", checked.path("scope").get(0).asText());
-        JsonNode refreshed = body(mvc.perform(browserPost().param("grant_type", "refresh_token")
-                .param("refresh_token", issued.path("refresh_token").asText()))
-                .andExpect(status().isOk()));
-        assertToken(refreshed, "ui");
+        assertEquals("ui", checked.path("scope").asText());
     }
 
     @Test
     public void serviceTokenHasServerScopeAndClientIdentity() throws Exception {
-        JsonNode issued = body(mvc.perform(clientPost("/oauth/token", "contract-secret")
+        JsonNode issued = body(mvc.perform(clientPost("/oauth2/token", "contract-secret")
                 .param("grant_type", "client_credentials").param("scope", "server"))
                 .andExpect(status().isOk()));
         assertToken(issued, "server");
         JsonNode profile = userInfo(issued.path("access_token").asText());
         assertEquals("account-service", profile.path("name").asText());
-        assertEquals("account-service", profile.path("oauth2Request").path("clientId").asText());
-        assertEquals("server", profile.path("oauth2Request").path("scope").get(0).asText());
         assertFalse(issued.has("refresh_token"));
-        JsonNode checked = body(mvc.perform(clientPost("/oauth/check_token", "contract-secret")
+        JsonNode checked = body(mvc.perform(clientPost("/oauth2/introspect", "contract-secret")
                 .param("token", issued.path("access_token").asText())).andExpect(status().isOk()));
+        assertTrue(checked.path("active").asBoolean());
         assertEquals("account-service", checked.path("client_id").asText());
-        assertEquals("server", checked.path("scope").get(0).asText());
-        assertFalse(checked.has("user_name"));
+        assertEquals("server", checked.path("scope").asText());
+        assertEquals("account-service", checked.path("sub").asText());
     }
 
     @Test
     public void serverScopeTokenMayCreateUsers() throws Exception {
-        String token = body(mvc.perform(clientPost("/oauth/token", "contract-secret")
+        String token = body(mvc.perform(clientPost("/oauth2/token", "contract-secret")
                 .param("grant_type", "client_credentials").param("scope", "server"))
                 .andExpect(status().isOk())).path("access_token").asText();
         String created = "upgrade-contract-created-" + UUID.randomUUID();
@@ -107,7 +109,7 @@ public class OAuthTokenContractTest {
 
     @Test
     public void uiScopeTokenIsForbiddenFromCreatingUsers() throws Exception {
-        String token = body(mvc.perform(passwordRequest("contract-password"))
+        String token = body(mvc.perform(codeExchange(authorizationCode(login("contract-password")), VERIFIER))
                 .andExpect(status().isOk())).path("access_token").asText();
         String attempted = "upgrade-contract-denied-" + UUID.randomUUID();
         mvc.perform(post("/users").header("Authorization", "Bearer " + token)
@@ -118,43 +120,109 @@ public class OAuthTokenContractTest {
     }
 
     @Test
-    public void wrongPasswordDoesNotIssueToken() throws Exception {
-        assertOAuthError(mvc.perform(passwordRequest("wrong-password"))
+    public void wrongPasswordDoesNotAuthenticateTheUser() throws Exception {
+        ResultActions failed = mvc.perform(post("/login").with(csrf())
+                .param("username", username).param("password", "wrong-password"))
+                .andExpect(status().is3xxRedirection());
+        assertTrue(failed.andReturn().getResponse().getRedirectedUrl().contains("error"));
+        MockHttpSession session = (MockHttpSession) failed.andReturn().getRequest().getSession(false);
+        ResultActions authorize = mvc.perform(authorizeRequest(session)).andExpect(status().is3xxRedirection());
+        assertTrue(authorize.andReturn().getResponse().getRedirectedUrl().contains("/login"));
+        assertFalse(authorize.andReturn().getResponse().getRedirectedUrl().contains("code="));
+    }
+
+    @Test
+    public void passwordGrantIsNoLongerSupported() throws Exception {
+        JsonNode rejected = body(mvc.perform(post("/oauth2/token").param("client_id", "browser")
+                .param("grant_type", "password").param("scope", "ui")
+                .param("username", username).param("password", "contract-password")
+                .accept(org.springframework.http.MediaType.APPLICATION_JSON))
+                .andExpect(status().is4xxClientError()));
+        assertFalse(rejected.has("access_token"));
+        assertFalse(rejected.has("refresh_token"));
+    }
+
+    @Test
+    public void authorizationCodeWithoutPkceIsRejected() throws Exception {
+        MockHttpSession session = login("contract-password");
+        ResultActions authorize = mvc.perform(get(UriComponentsBuilder.fromPath("/oauth2/authorize")
+                .queryParam("response_type", "code").queryParam("client_id", "browser")
+                .queryParam("scope", "ui").queryParam("redirect_uri", REDIRECT).build().toUri())
+                .session(session).accept(org.springframework.http.MediaType.TEXT_HTML))
+                .andExpect(status().is3xxRedirection());
+        String location = authorize.andReturn().getResponse().getRedirectedUrl();
+        assertTrue(location, location.contains("error=invalid_request"));
+        assertFalse(location, location.contains("code="));
+    }
+
+    @Test
+    public void wrongPkceVerifierDoesNotIssueToken() throws Exception {
+        String code = authorizationCode(login("contract-password"));
+        assertOAuthError(mvc.perform(codeExchange(code, VERIFIER + "-tampered"))
                 .andExpect(status().isBadRequest()), "invalid_grant");
     }
 
     @Test
     public void wrongClientSecretDoesNotIssueToken() throws Exception {
-        ResultActions rejected = mvc.perform(clientPost("/oauth/token", "wrong-secret")
+        ResultActions rejected = mvc.perform(clientPost("/oauth2/token", "wrong-secret")
                 .param("grant_type", "client_credentials").param("scope", "server"))
                 .andExpect(status().isUnauthorized());
-        // MockMvc does not perform the servlet container error-page dispatch.
-        assertEquals("Unauthorized", rejected.andReturn().getResponse().getErrorMessage());
-        assertTrue(rejected.andReturn().getResponse().getHeader("WWW-Authenticate").startsWith("Basic "));
-        assertEquals("", rejected.andReturn().getResponse().getContentAsString());
+        assertOAuthError(rejected, "invalid_client");
     }
 
     @Test
     public void serviceCannotRequestBrowserScope() throws Exception {
-        assertOAuthError(mvc.perform(clientPost("/oauth/token", "contract-secret")
+        assertOAuthError(mvc.perform(clientPost("/oauth2/token", "contract-secret")
                 .param("grant_type", "client_credentials").param("scope", "ui"))
                 .andExpect(status().isBadRequest()), "invalid_scope");
     }
 
     @Test
-    public void unknownTokenCannotBeIntrospected() throws Exception {
-        assertOAuthError(mvc.perform(clientPost("/oauth/check_token", "contract-secret")
+    public void unknownTokenIsReportedInactive() throws Exception {
+        JsonNode response = body(mvc.perform(clientPost("/oauth2/introspect", "contract-secret")
                 .param("token", "unknown-" + UUID.randomUUID()))
-                .andExpect(status().isBadRequest()), "invalid_token");
+                .andExpect(status().isOk()));
+        assertFalse(response.path("active").asBoolean());
+        assertFalse(response.has("scope"));
+        assertFalse(response.has("client_id"));
     }
 
-    private MockHttpServletRequestBuilder passwordRequest(String password) {
-        return browserPost().param("grant_type", "password").param("scope", "ui")
-                .param("username", username).param("password", password);
+    private MockHttpSession login(String password) throws Exception {
+        ResultActions login = mvc.perform(post("/login").with(csrf())
+                .param("username", username).param("password", password))
+                .andExpect(status().is3xxRedirection());
+        MockHttpSession session = (MockHttpSession) login.andReturn().getRequest().getSession(false);
+        assertNotNull(session);
+        return session;
     }
 
-    private MockHttpServletRequestBuilder browserPost() {
-        return post("/oauth/token").header("Authorization", basic("browser", ""));
+    private MockHttpServletRequestBuilder authorizeRequest(MockHttpSession session) throws Exception {
+        // The authorization endpoint reads GET parameters from the query string, not MockMvc params.
+        return get(UriComponentsBuilder.fromPath("/oauth2/authorize")
+                .queryParam("response_type", "code").queryParam("client_id", "browser").queryParam("scope", "ui")
+                .queryParam("redirect_uri", REDIRECT).queryParam("state", "contract-state")
+                .queryParam("code_challenge", challenge(VERIFIER)).queryParam("code_challenge_method", "S256")
+                .build().toUri()).session(session).accept(org.springframework.http.MediaType.TEXT_HTML);
+    }
+
+    private String authorizationCode(MockHttpSession session) throws Exception {
+        ResultActions authorize = mvc.perform(authorizeRequest(session));
+        authorize.andExpect(status().is3xxRedirection());
+        String location = authorize.andReturn().getResponse().getRedirectedUrl();
+        assertTrue(location + authorize.andReturn().getResponse().getContentAsString(), location.startsWith(REDIRECT));
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(location);
+        assertEquals("contract-state", uri.build().getQueryParams().getFirst("state"));
+        return uri.build().getQueryParams().getFirst("code");
+    }
+
+    private MockHttpServletRequestBuilder codeExchange(String code, String verifier) {
+        return post("/oauth2/token").param("client_id", "browser").param("grant_type", "authorization_code")
+                .param("code", code).param("redirect_uri", REDIRECT).param("code_verifier", verifier);
+    }
+
+    private String challenge(String verifier) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
     }
 
     private MockHttpServletRequestBuilder clientPost(String path, String secret) {

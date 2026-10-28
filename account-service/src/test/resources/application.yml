@@ -1,8 +1,26 @@
 spring:
-  mongodb:
-    embedded:
-      version: 3.5.5
-  data:
-    mongodb:
-      database: piggymetrics
-      port: 0
+---
+eureka:
+  client:
+    enabled: false
+
+spring:
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+
+# Explicit local fixture for contexts with Config Server disabled. Never used in production.
+security:
+  oauth2:
+    resource:
+      introspection-uri: http://127.0.0.1:1/oauth2/introspect
+      client-id: account-service
+      client-secret: contract-secret
+    client:
+      clientId: account-service
+      clientSecret: contract-secret
+      accessTokenUri: http://127.0.0.1:1/oauth2/token
+      grant-type: client_credentials
+      scope: server

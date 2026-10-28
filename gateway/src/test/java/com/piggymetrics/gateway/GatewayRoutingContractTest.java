@@ -5,7 +5,7 @@ import org.junit.AfterClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -68,7 +68,7 @@ public class GatewayRoutingContractTest {
         String[][] routes = {{"auth-service", "/uaa/**"}, {"account-service", "/accounts/**"},
                 {"statistics-service", "/statistics/**"}, {"notification-service", "/notifications/**"}};
         for (int i = 0; i < routes.length; i++) {
-            String prefix = "spring.cloud.gateway.routes[" + i + "].";
+            String prefix = "spring.cloud.gateway.server.webflux.routes[" + i + "].";
             String[] r = routes[i];
             registry.add(prefix + "id", () -> r[0]);
             registry.add(prefix + "uri", () -> url);

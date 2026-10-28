@@ -42,7 +42,7 @@ public class NotificationBearerContractTest {
     @Autowired private org.springframework.context.ApplicationContext context;
     @Autowired private org.springframework.security.web.FilterChainProxy filters;
     @DynamicPropertySource public static void endpoints(DynamicPropertyRegistry registry) {
-        registry.add("security.oauth2.resource.user-info-uri",()->"http://127.0.0.1:"+SERVER.getAddress().getPort()+"/userinfo");
+        registry.add("security.oauth2.resource.introspection-uri",()->"http://127.0.0.1:"+SERVER.getAddress().getPort()+"/oauth2/introspect");
     }
     @Before public void seed() {
         owner="recipient-"+UUID.randomUUID(); other=owner+"-other";
@@ -114,8 +114,9 @@ public class NotificationBearerContractTest {
         assertEquals(0,REDIRECT.get()); issuerStatus=200;
         String valid=profile(owner,"browser","ui");
         for(String bad:Arrays.asList("not-json","[]","{\"error\":\"invalid_token\"}",
-                valid.replace("[\"ui\"]","[]"),valid.replace("[\"ui\"]","[42]"),
-                valid.replace(",\"scope\":[\"ui\"]",""),valid.replace("\"clientId\":\"browser\"","\"clientId\":\"\""))) {
+                valid.replace("\"scope\":\"ui\"","\"scope\":\"\""),valid.replace("\"scope\":\"ui\"","\"scope\":42"),
+                valid.replace(",\"scope\":\"ui\"",""),valid.replace("\"client_id\":\"browser\"","\"client_id\":\"\""),
+                valid.replace("\"active\":true","\"active\":false"),valid.replace("\"active\":true,",""))) {
             issuerBody=bad;
             mvc.perform(put("/recipients/current").header("Authorization","Bearer user-ui")
                     .contentType(MediaType.APPLICATION_JSON).content(payload(owner,"blocked@example.invalid"))).andExpect(status().isUnauthorized());
@@ -127,7 +128,7 @@ public class NotificationBearerContractTest {
                 .andExpect(status().isOk()).andExpect(header().doesNotExist("Set-Cookie")).andReturn();
         assertNull(result.getRequest().getSession(false));
         Object adapter=context.getBean(org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector.class);
-        assertEquals("com.piggymetrics.notification.service.security.LegacyUserInfoOpaqueTokenIntrospector",adapter.getClass().getName());
+        assertEquals("com.piggymetrics.notification.service.security.IntrospectionEndpointTokenIntrospector",adapter.getClass().getName());
         assertTrue(filters.getFilterChains().stream().flatMap(c->c.getFilters().stream()).anyMatch(f->f.getClass().getSimpleName().equals("BearerTokenAuthenticationFilter")));
         assertFalse(filters.getFilterChains().stream().flatMap(c->c.getFilters().stream()).anyMatch(f->f.getClass().getSimpleName().contains("OAuth2Login")));
         try { Class.forName("org.springframework.security.oauth2.provider.token.ResourceServerTokenServices"); fail("Legacy OAuth still present"); }
@@ -151,16 +152,18 @@ public class NotificationBearerContractTest {
         assertEquals(frequency,settings.getFrequency()); assertEquals(Boolean.valueOf(active),settings.getActive()); assertEquals(new Date(last),settings.getLastNotified());
     }
     private static String profile(String name,String client,String scope) {
-        return "{\"name\":\""+name+"\",\"oauth2Request\":{\"clientId\":\""+client+"\",\"scope\":[\""+scope+"\"]}}";
+        return "{\"active\":true,\"sub\":\""+name+"\",\"client_id\":\""+client+"\",\"scope\":\""+scope+"\"}";
     }
     private static HttpServer startServer() {
         try {
             HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
             server.createContext("/",exchange->{
                 String path=exchange.getRequestURI().getPath(); String body; int status=200;
-                if(path.equals("/userinfo")) {
+                if(path.equals("/oauth2/introspect")) {
                     USERINFO.incrementAndGet(); status=issuerStatus;
-                    body=issuerBody!=null?issuerBody:"Bearer service-server".equals(exchange.getRequestHeaders().getFirst("Authorization"))
+                    String form=new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8);
+                    String presented="POST".equals(exchange.getRequestMethod())?"Bearer "+java.net.URLDecoder.decode(form.replaceFirst("^token=([^&]*).*$","$1"),"UTF-8"):"";
+                    body=issuerBody!=null?issuerBody:"Bearer service-server".equals(presented)
                             ?profile("notification-service","notification-service","server"):profile(owner,"browser","ui");
                     if(status==302) exchange.getResponseHeaders().set("Location","http://localhost:"+server.getAddress().getPort()+"/redirect");
                 } else { REDIRECT.incrementAndGet(); body=profile(owner,"browser","ui"); }

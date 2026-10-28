@@ -8,6 +8,7 @@ spring:
       port: 27017
 
 server:
+  forward-headers-strategy: framework
   servlet:
     context-path: /uaa
   port: 5000

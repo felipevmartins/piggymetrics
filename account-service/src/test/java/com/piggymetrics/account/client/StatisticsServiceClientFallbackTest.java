@@ -17,7 +17,7 @@ import static org.hamcrest.Matchers.containsString;
  */
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
-        "feign.circuitbreaker.enabled=true"
+        "spring.cloud.openfeign.circuitbreaker.enabled=true"
 })
 public class StatisticsServiceClientFallbackTest {
     @Autowired

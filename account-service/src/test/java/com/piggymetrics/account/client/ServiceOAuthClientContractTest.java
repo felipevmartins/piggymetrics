@@ -3,7 +3,7 @@ package com.piggymetrics.account.client;
 import com.piggymetrics.account.config.ServiceClientCredentialsProperties;
 import com.piggymetrics.account.domain.Account;
 import com.piggymetrics.account.domain.User;
-import com.piggymetrics.account.service.security.LegacyUserInfoOpaqueTokenIntrospector;
+import com.piggymetrics.account.service.security.IntrospectionEndpointTokenIntrospector;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import com.sun.net.httpserver.HttpServer;
 import feign.RequestInterceptor;
@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.OutputCaptureRule;
-import org.springframework.cloud.openfeign.FeignContext;
+import org.springframework.cloud.openfeign.FeignClientFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real Spring-created Feign clients against a local HTTP issuer and downstream endpoints. */
 @RunWith(SpringRunner.class)
-@SpringBootTest(properties = "feign.circuitbreaker.enabled=true")
+@SpringBootTest(properties = "spring.cloud.openfeign.circuitbreaker.enabled=true")
 @AutoConfigureMockMvc
 public class ServiceOAuthClientContractTest {
     private static final HttpServer SERVER = startServer();
@@ -57,7 +57,7 @@ public class ServiceOAuthClientContractTest {
     @Autowired private StatisticsServiceClient statistics;
     @Autowired private OAuth2AuthorizedClientService store;
     @Autowired private ServiceClientCredentialsProperties properties;
-    @Autowired private FeignContext feign;
+    @Autowired private FeignClientFactory feign;
     @Autowired private ApplicationContext context;
     @Autowired private MockMvc mvc;
     @Autowired private FilterChainProxy filters;
@@ -66,7 +66,7 @@ public class ServiceOAuthClientContractTest {
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String base = "http://127.0.0.1:" + SERVER.getAddress().getPort();
-        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth/token");
+        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth2/token");
         registry.add("clients.auth-service.url", () -> base);
         registry.add("clients.statistics-service.url", () -> base);
     }
@@ -172,7 +172,7 @@ public class ServiceOAuthClientContractTest {
             assertFalse(interceptors.values().stream()
                     .anyMatch(i -> i.getClass().getName().contains("OAuth2FeignRequestInterceptor")));
         }
-        assertTrue(context.getBean(OpaqueTokenIntrospector.class) instanceof LegacyUserInfoOpaqueTokenIntrospector);
+        assertTrue(context.getBean(OpaqueTokenIntrospector.class) instanceof IntrospectionEndpointTokenIntrospector);
         assertTrue(filters.getFilterChains().stream().flatMap(c -> c.getFilters().stream())
                 .anyMatch(f -> f.getClass().getSimpleName().equals("BearerTokenAuthenticationFilter")));
         assertFalse(filters.getFilterChains().stream().flatMap(c -> c.getFilters().stream())
@@ -231,7 +231,7 @@ public class ServiceOAuthClientContractTest {
                 String path = exchange.getRequestURI().getPath();
                 int status = 200;
                 String response = "";
-                if (path.equals("/oauth/token")) {
+                if (path.equals("/oauth2/token")) {
                     int n = TOKEN_CALLS.incrementAndGet();
                     TOKEN_FORMS.add(URLDecoder.decode(org.springframework.util.StreamUtils.copyToString(exchange.getRequestBody(),
                             StandardCharsets.UTF_8), "UTF-8"));

@@ -270,3 +270,80 @@ Ja registradas em D2 (Spring Cloud CircuitBreaker "Collecting Metrics", Resilien
 - Comportamento do gateway reativo com cookies/CORS no navegador nao foi verificado em navegador, so por curl e contrato.
 - Rollback da F2 nao ensaiado. Fluxo de estatisticas com cambio real nao observado (API externa 401).
 - Nao existe teste automatizado da regra `EndpointRequest.to("prometheus")` (F1b).
+
+## F3 - Boot 3.5.x / Cloud 2025.0.3, bytecode 17, jakarta, Micrometer Tracing, Authorization Server
+
+Estado: `em_execucao` (2026-10-27). Dividida em F3a e F3b (decisao abaixo); F3a primeiro.
+
+### Entrada
+- Revisao 0351a85 (F2 concluida), arvore limpa na branch `pilot/java8-to-21`, 116 testes, bytecode 55 (major). Runtime e build Temurin 21.0.13, Linux/WSL2.
+
+### Matriz (alvo)
+| Item | Origem | Alvo |
+| --- | --- | --- |
+| Spring Boot | 2.7.18 | 3.5.16 (existe em Maven Central; `spring-cloud-dependencies:2025.0.3` responde 200) |
+| Spring Cloud | 2021.0.9 | 2025.0.3 (gateway 4.3.5, openfeign 4.3.3, netflix 4.3.3, config 4.3.4, commons 4.3.3, circuitbreaker 3.3.3, bus 4.3.2) |
+| Bytecode | 11 (major 55) | 17 (major 61) |
+| Namespace | javax | jakarta (so onde ha API de EE: validation, mail, servlet) |
+| Tracing | Sleuth 3.1.10 | Micrometer Tracing (bridge Brave) |
+| Config client | `bootstrap.yml` | `spring.config.import=configserver:` |
+| Auth | `spring-cloud-starter-oauth2` 2.2.5 | Spring Authorization Server (F3b) |
+| Testes Mongo | Flapdoodle embutido | Testcontainers |
+
+### Fontes oficiais lidas (2026-10-27)
+- Guia de migracao Boot 3.0 e notas do Cloud 2025.0: Java 17 minimo; Jakarta EE 9+; Flapdoodle sem autoconfiguracao no Boot 3; `management.<produto>.metrics.export` renomeado; correspondencia de barra final desligada por padrao.
+- Cloud 2025.0 / compatibilidade do train (https://spring.io/projects/spring-cloud): 2025.0.x pareia com Boot 3.5.x. Starter do gateway reativo passa a `spring-cloud-starter-gateway-server-webflux` e propriedades a `spring.cloud.gateway.server.webflux.*`; cabecalhos `Forwarded` exigem `trusted-proxies`.
+- Boot 3.5, tracing (https://docs.spring.io/spring-boot/3.5/reference/actuator/tracing.html): artefatos `io.micrometer:micrometer-tracing-bridge-brave` (+ `io.zipkin.reporter2:zipkin-reporter-brave` so se houver reporter) e `spring-boot-starter-actuator`; `management.tracing.sampling.probability` (padrao 10%); correlacao de log por `logging.pattern.correlation` (ex.: `[${spring.application.name:},%X{traceId:-},%X{spanId:-}] ` com `logging.include-application-name=false`, que reproduz o formato do Sleuth). `management.tracing.enabled`/`propagation.*` nao confirmados nessa pagina: conferir no apendice de propriedades antes de usar.
+- Boot 3.5, Testcontainers (https://docs.spring.io/spring-boot/3.5/reference/testing/testcontainers.html): `spring-boot-testcontainers`, `org.testcontainers:junit-jupiter` e `org.testcontainers:mongodb`; exemplos so em Jupiter (`@Testcontainers`, `@ServiceConnection`, `MongoDBContainer`); `@DynamicPropertySource` como alternativa; aviso de que `@Container` estatico da extensao JUnit para o container ao fim da classe enquanto o contexto Spring pode ficar em cache; recomenda `@ImportTestcontainers`. Pagina nao cobre JUnit 4/`SpringRunner`.
+- Spring Cloud OpenFeign (https://docs.spring.io/spring-cloud-openfeign/reference/spring-cloud-openfeign.html): `spring.cloud.openfeign.circuitbreaker.enabled`, prefixo `spring.cloud.openfeign.client.config.*`, Apache HttpClient 4 nao suportado (usar HC5), nomes de circuit breaker alfanumericos por padrao (`spring.cloud.openfeign.circuitbreaker.alphanumeric-ids.enabled=false` restaura os anteriores), Micrometer via `MicrometerObservationCapability`.
+- Spring Authorization Server (visao geral, getting started, `AuthorizationServerSettings`) e Security 6.5 (method security, authorize-http-requests, opaque token): sem grant `password`; endpoints padrao `/oauth2/authorize`, `/oauth2/token`, `/oauth2/introspect`, `/oauth2/revoke`, `/oauth2/jwks`, `/userinfo`; `@EnableMethodSecurity`; `authorizeHttpRequests`/`requestMatchers`; token opaco por `spring.security.oauth2.resourceserver.opaquetoken.*`.
+- Driver MongoDB (tabela de compatibilidade): comeca no servidor 4.2; `mongo:3` nao esta coberto.
+- Paginas que devolveram 404 ou sem conteudo util: migracao Security 5.8/6.0 e protocolo de endpoints do SAS. Itens nao confirmados em fonte (campos da resposta de introspeccao, nomes exatos de propriedades de tracing) serao caracterizados por teste ou lidos no apendice antes de uso.
+
+### Achados que bloqueiam
+1. `spring-cloud-starter-oauth2` 2.2.5 (Spring Security OAuth legado) nao roda em Boot 3/jakarta; o Authorization Server novo nao tem password grant. O login do navegador, `check_token` e `/users/current` mudam de contrato.
+2. Flapdoodle sem suporte no Boot 3: exige Testcontainers (D3).
+3. `mongo:3` fora da tabela do driver 5.x: precisa ser medido; se falhar, a F4m (servidor) sobe para antes dos testes de F3.
+4. Campos de introspeccao e mapeamento de authorities do SAS nao confirmados.
+
+### Decisoes e assuncoes
+- **Divisao F3a/F3b.** F3a: tudo menos o auth (Boot 3.5.x, jakarta, Micrometer Tracing, `spring.config.import`, gateway, Testcontainers, `SecurityFilterChain` dos servicos). F3b: auth-service no Spring Authorization Server, login do navegador por authorization code + PKCE (D4), servicos consumindo `/oauth2/introspect` e `/oauth2/token`. Motivo: o auth e o unico bloqueio de contrato (achado 1); isolar permite commit com gates verdes para o resto e deixa a mudanca deliberada de contrato num commit proprio. Os modulos compartilham o parent do pom raiz, entao o auth-service nao pode ficar em Boot 2.7 dentro do reactor: F3a e F3b sao executadas em sequencia na mesma branch e o commit de gates verdes so ocorre quando o reactor inteiro (incluindo o auth) passa; commits intermediarios, se houver, ficam marcados como nao verificados.
+- Cliente publico `browser` com PKCE; tokens opacos validados por introspeccao.
+- Testes continuam JUnit 4 via `junit-vintage-engine` (gerenciado no Boot 3.5); como a pagina de Testcontainers so mostra Jupiter, usa-se container compartilhado iniciado em holder estatico + `@DynamicPropertySource` (suportado pelo TestContext), e isso e uma assuncao a ser comprovada pelos testes.
+- Imagem do Mongo nos testes: **medido** (account-service, `AccountRepositoryTest`, Testcontainers com `mongo:3`): o driver 5.5.2 do Boot 3.5 recusa o servidor (`Server ... reports wire version 6, but this version of the driver requires at least 8 (MongoDB 4.2)`). Decisao: testes usam `mongo:4.4` (banco vazio; configuravel por `piggymetrics.test.mongo-image`). O servidor de producao/compose (`mongodb/Dockerfile`, `FROM mongo:3`) continua sem driver compativel: a escada de servidor com restauracao do dump (F4m) deixa de ser opcional para rodar a stack com F3; para os fluxos vivos da F3 usa-se banco novo (sem dados migrados), e a migracao dos dados fica registrada como pendencia da F4m.
+
+### Mudanca pretendida
+F3a: (1) pom raiz Boot 3.5.x/Cloud 2025.0.3/`java.version` 17; (2) `javax.*` -> `jakarta.*` nos arquivos que usam validation/mail/servlet (arquivo a arquivo, sem substituicao global); (3) Sleuth -> Micrometer Tracing, padrao de log com `traceId`/`spanId`, remocao do workaround `feignCircuitBreakerBuilder` apos conferir que o problema nao se repete; (4) `bootstrap.yml` -> `spring.config.import` e remocao de `spring-cloud-starter-bootstrap`; (5) gateway: starter e propriedades renomeados, `trusted-proxies` se necessario; (6) `ResourceServerConfig`/`SecurityConfig` para `SecurityFilterChain`, `authorizeHttpRequests`, `requestMatchers`, `@EnableMethodSecurity`; (7) propriedades `management.*` renomeadas (prometheus); (8) Flapdoodle -> Testcontainers; (9) `mongodb/Dockerfile` so se a medicao exigir.
+F3b: auth-service reescrito no Spring Authorization Server (clientes browser, account-service, statistics-service, notification-service), `launch.js` com authorization code + PKCE, servicos adaptados; testes de contrato antigos (password grant, `check_token`) substituidos por equivalentes, cada troca registrada como mudanca deliberada.
+
+### Saida (gates)
+`mvn -B -ntp clean verify` exit 0 (JDK 21), sem `skipTests`; `check_bytecode.py 61`; `compare_surefire.py` contra a baseline E4g com identidades adicionadas/removidas/alteradas listadas e motivo, `not_passed=0`; stack reconstruida com fluxos vivos (login, cadastro, PUT account -> statistics, rotas do gateway, series Prometheus, mesmo traceId entre servicos); build, testes e fluxos registrados separadamente; commit so com os gates verdes, sem push.
+
+### Recuperacao F3
+`git revert` dos commits F3a/F3b; tag `f2-final` no commit 0351a85 e imagens `:f2` guardadas antes de reconstruir. Sem migracao de dados do Mongo; tokens do auth sao em memoria. Rollback nao ensaiado ate registro em contrario.
+
+### Resultado F3 (2026-10-27)
+- Execucao: F3a (tudo menos auth) e F3b (auth no Spring Authorization Server, resource servers por introspeccao, `launch.js` com authorization code + PKCE) executadas.
+- Matriz final: Boot 3.5.16, Cloud 2025.0.3, bytecode 17 (major 61), runtime e build Temurin 21.0.13, Micrometer Tracing (Brave), Testcontainers `mongo:4.4`.
+- Build: `mvn -B -ntp clean verify` do reactor inteiro, JDK 21, sem `skipTests`: BUILD SUCCESS, exit 0 (repetido apos os dois ajustes dos fluxos vivos). `check_bytecode.py 61`: ok em todos os modulos.
+- Testes (116 -> 119): auth 20, account 33, statistics 24, notification 34, gateway 3, config 5; 0 falhas, 0 erros, 0 ignorados. `compare_surefire.py` contra after2 (F2): before=116 after=119 removed=3 added=6 not_passed=0, `ok=False` so pela troca deliberada. Removidos: `browserPasswordTokenCanBeIntrospectedAndRefreshed`, `unknownTokenCannotBeIntrospected`, `wrongPasswordDoesNotIssueToken`. Adicionados: `browserAuthorizationCodeTokenCanBeIntrospected`, `unknownTokenIsReportedInactive`, `wrongPasswordDoesNotAuthenticateTheUser`, `passwordGrantIsNoLongerSupported`, `authorizationCodeWithoutPkceIsRejected`, `wrongPkceVerifierDoesNotIssueToken`. Os demais testes (incluindo o contrato de roteamento do gateway e os de Ribbon por nome) mantem identidade e asserts.
+- Fluxos vivos (stack reconstruida, Mongo novo `mongo:4.4`): 5 servicos UP no Eureka; `POST /accounts/` 200; login por authorization code + PKCE pelo gateway (redirect para `http://localhost/uaa/login`, depois `?code=`), token trocado em `/uaa/oauth2/token`; `GET /accounts/current` 200, sem token 401; token `ui` em `POST /uaa/users` 403; `PUT /accounts/current` 200; `/notifications/recipients/current` 200; `GET /` 200, caminho desconhecido 404; Prometheus com 3 alvos `up`, series `resilience4j_circuitbreaker_calls_seconds_count`; Grafana 200; mesmo traceId entre account e auth (cadastro) e entre account e statistics (PUT).
+- Nao observado: `/statistics/current` vazio porque `api.exchangeratesapi.io` devolve 401 (preexistente, circuit breaker `failed` e fallback 200).
+
+### Achados e correcoes F3
+- Gateway 4.3 so adiciona `Forwarded`/`X-Forwarded-*` se o endereco remoto casar com `trusted-proxies` (sem default); sem isso o `Location` do login expunha `auth-service:5000`. Corrigido em `shared/gateway.yml` com faixas privadas/loopback.
+- Sem `io.github.openfeign:feign-micrometer` o Feign nao propagava o trace (traceIds diferentes); dependencia (gerenciada, 13.6.1) adicionada em account, statistics e notification.
+- `mongo:3` e incompativel com o driver 5.x e o `/data/db` do 3.x nao abre no 4.4: `mongodb/Dockerfile` interino em `mongo:4.4`, volumes recriados (dados antigos descartados; migracao fica na F4m).
+- Reiniciar so o auth invalida o token de servico em cache nos dependentes (token store em memoria, igual ao legado) e o cache do load balancer do gateway fica obsoleto apos recriar servicos; reiniciar dependentes/gateway resolve.
+
+### Mudancas deliberadas F3
+- Password grant removido; browser usa authorization code + PKCE (cliente publico `browser`, redirect `http://localhost/`, propriedade `piggymetrics.auth.browser.redirect-uris`); cadastro agora redireciona ao login da `uaa` em vez de token silencioso; sem refresh token para o cliente publico.
+- `check_token`/user-info trocados por `/oauth2/introspect` (RFC 7662: token desconhecido 200 `{"active":false}`, `scope` string, `sub`); `/users/current` devolve so `{"name":...}`; cliente com segredo errado: 401 `invalid_client` em JSON.
+- Propriedades: `security.oauth2.resource.user-info-uri` -> `introspection-uri` + `client-id`/`client-secret`; `accessTokenUri` -> `/uaa/oauth2/token`; segredos de clientes com BCrypt em memoria, cliente de servico ignorado com aviso se o segredo estiver vazio; `refresh_token` removido dos clientes de servico; TTL do access token mantido em 12 h.
+- `server.forward-headers-strategy: framework` no auth; `trusted-proxies` no gateway; `bootstrap.yml` -> `spring.config.import`; Flapdoodle -> Testcontainers `mongo:4.4`.
+
+### Pendencias F3
+- Login por navegador real (PKCE em `crypto.subtle`, so em localhost/contexto seguro) nao exercitado; validado por curl e contrato.
+- `mongodb/Dockerfile` em `mongo:4.4` e interino; escada de servidor e migracao de dados na F4m.
+- `trusted-proxies` cobre faixas privadas; ajustar no deploy real. Rollback nao ensaiado (imagens `:f2` guardadas).
+- Termos "legacy" remanescentes em docs E6; teste automatizado da regra `prometheus`; HANDOFF.md a atualizar.

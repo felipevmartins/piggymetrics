@@ -1,4 +1,4 @@
-FROM mongo:3
+FROM mongo:4.4
 MAINTAINER Alexander Lukyanchikov <sqshq@sqshq.com>
 
 ADD init.sh /init.sh

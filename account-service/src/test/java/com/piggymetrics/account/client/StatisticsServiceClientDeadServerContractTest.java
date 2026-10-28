@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
         "clients.statistics-service.url=",
-        "feign.circuitbreaker.enabled=true",
+        "spring.cloud.openfeign.circuitbreaker.enabled=true",
         "piggymetrics.circuit-breaker.timeout=3000ms"})
 public class StatisticsServiceClientDeadServerContractTest {
     private static final int CLOSED_PORT = closedPort();
@@ -45,7 +45,7 @@ public class StatisticsServiceClientDeadServerContractTest {
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String live = "127.0.0.1:" + LIVE.getAddress().getPort();
-        registry.add("security.oauth2.client.accessTokenUri", () -> "http://" + live + "/oauth/token");
+        registry.add("security.oauth2.client.accessTokenUri", () -> "http://" + live + "/oauth2/token");
         registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[0].uri",
                 () -> "http://127.0.0.1:" + CLOSED_PORT);
         registry.add("spring.cloud.discovery.client.simple.instances.statistics-service[1].uri", () -> "http://" + live);
@@ -99,7 +99,7 @@ public class StatisticsServiceClientDeadServerContractTest {
                 while (exchange.getRequestBody().read(buffer) != -1) {
                     // discard
                 }
-                if (exchange.getRequestURI().getPath().equals("/oauth/token")) {
+                if (exchange.getRequestURI().getPath().equals("/oauth2/token")) {
                     byte[] body = "{\"access_token\":\"t\",\"token_type\":\"bearer\",\"expires_in\":3600,\"scope\":\"server\"}"
                             .getBytes(StandardCharsets.UTF_8);
                     exchange.getResponseHeaders().add("Content-Type", "application/json");

@@ -58,7 +58,7 @@ public class StatisticsBearerContractTest {
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String base = "http://127.0.0.1:" + SERVER.getAddress().getPort();
-        registry.add("security.oauth2.resource.user-info-uri", () -> base + "/userinfo");
+        registry.add("security.oauth2.resource.introspection-uri", () -> base + "/oauth2/introspect");
         registry.add("rates.url", () -> base);
     }
 
@@ -171,9 +171,10 @@ public class StatisticsBearerContractTest {
         assertEquals(0, REDIRECT_CALLS.get()); issuerStatus = 200;
         String valid = profile(owner, "browser", "ui");
         for (String invalid : Arrays.asList("[]", "not-json", "{\"error\":\"invalid_token\"}",
-                valid.replace("[\"ui\"]", "[42]"), valid.replace("[\"ui\"]", "[]"),
-                valid.replace("\"name\":\"" + owner + "\"", "\"name\":{}"),
-                valid.replace(",\"scope\":[\"ui\"]", ""))) {
+                valid.replace("\"scope\":\"ui\"", "\"scope\":42"), valid.replace("\"scope\":\"ui\"", "\"scope\":\"\""),
+                valid.replace("\"sub\":\"" + owner + "\"", "\"sub\":{}"),
+                valid.replace(",\"scope\":\"ui\"", ""), valid.replace("\"active\":true", "\"active\":false"),
+                valid.replace("\"active\":true,", ""))) {
             issuerBody = invalid;
             mvc.perform(get("/current").header("Authorization", "Bearer user-ui"))
                     .andExpect(status().isUnauthorized());
@@ -188,7 +189,7 @@ public class StatisticsBearerContractTest {
                 .andExpect(status().isOk()).andExpect(header().doesNotExist("Set-Cookie")).andReturn();
         assertNull(result.getRequest().getSession(false));
         Object introspector = context.getBean(org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector.class);
-        assertEquals("com.piggymetrics.statistics.service.security.LegacyUserInfoOpaqueTokenIntrospector", introspector.getClass().getName());
+        assertEquals("com.piggymetrics.statistics.service.security.IntrospectionEndpointTokenIntrospector", introspector.getClass().getName());
         assertTrue(filters.getFilterChains().stream().flatMap(c -> c.getFilters().stream())
                 .anyMatch(f -> f.getClass().getSimpleName().equals("BearerTokenAuthenticationFilter")));
         assertFalse(filters.getFilterChains().stream().flatMap(c -> c.getFilters().stream())
@@ -200,16 +201,18 @@ public class StatisticsBearerContractTest {
     }
 
     private static String profile(String name, String client, String scope) {
-        return "{\"name\":\"" + name + "\",\"oauth2Request\":{\"clientId\":\"" + client + "\",\"scope\":[\"" + scope + "\"]}}";
+        return "{\"active\":true,\"sub\":\"" + name + "\",\"client_id\":\"" + client + "\",\"scope\":\"" + scope + "\"}";
     }
     private static HttpServer startServer() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath(); int status = 200; String body;
-                if (path.equals("/userinfo")) {
+                if (path.equals("/oauth2/introspect")) {
                     USERINFO_CALLS.incrementAndGet(); status = issuerStatus;
-                    String auth = exchange.getRequestHeaders().getFirst("Authorization");
+                    String form = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                    String auth = "POST".equals(exchange.getRequestMethod()) ? "Bearer " + java.net.URLDecoder.decode(
+                            form.replaceFirst("^token=([^&]*).*$", "$1"), "UTF-8") : "";
                     body = issuerBody != null ? issuerBody : "Bearer service-server".equals(auth)
                             ? profile("account-service", "account-service", "server") : profile(owner, "browser", "ui");
                     if (status == 302) exchange.getResponseHeaders().set("Location",

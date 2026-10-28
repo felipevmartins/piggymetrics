@@ -1,6 +1,8 @@
 spring:
+  config:
+    import: "configserver:"
   application:
-    name: statistics-service
+    name: gateway
   cloud:
     config:
       uri: http://config:8888

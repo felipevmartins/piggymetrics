@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.cloud.openfeign.FeignContext;
+import org.springframework.cloud.openfeign.FeignClientFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -56,7 +56,7 @@ public class ServiceOAuthClientContractTest {
     @Autowired private AccountServiceClient client;
     @Autowired private OAuth2AuthorizedClientService store;
     @Autowired private ServiceClientCredentialsProperties properties;
-    @Autowired private FeignContext feign;
+    @Autowired private FeignClientFactory feign;
     @Autowired private ApplicationContext context;
     @Autowired private FilterChainProxy filters;
     @Autowired private MockMvc mvc;
@@ -67,7 +67,7 @@ public class ServiceOAuthClientContractTest {
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {
         String base = "http://127.0.0.1:" + SERVER.getAddress().getPort();
-        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth/token");
+        registry.add("security.oauth2.client.accessTokenUri", () -> base + "/oauth2/token");
         registry.add("clients.account-service.url", () -> base);
     }
     @Before public void resetFixture() {
@@ -189,7 +189,7 @@ public class ServiceOAuthClientContractTest {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
             server.createContext("/",exchange -> {
                 String path=exchange.getRequestURI().getPath(); int status=200; String response;
-                if(path.equals("/oauth/token")) {
+                if(path.equals("/oauth2/token")) {
                     int number=TOKENS.incrementAndGet(); status=issuerStatus;
                     FORMS.add(org.springframework.util.StreamUtils.copyToString(exchange.getRequestBody(),StandardCharsets.UTF_8));
                     BASIC.add(exchange.getRequestHeaders().getFirst("Authorization"));
