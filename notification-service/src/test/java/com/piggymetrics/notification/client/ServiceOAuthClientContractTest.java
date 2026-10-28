@@ -16,9 +16,9 @@ import org.junit.runner.RunWith;
 import org.mockito.InOrder;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.cloud.openfeign.FeignClientFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -61,8 +61,8 @@ public class ServiceOAuthClientContractTest {
     @Autowired private FilterChainProxy filters;
     @Autowired private MockMvc mvc;
     @Autowired private NotificationService notifications;
-    @MockBean private RecipientService recipients;
-    @MockBean private EmailService email;
+    @MockitoBean private RecipientService recipients;
+    @MockitoBean private EmailService email;
 
     @DynamicPropertySource
     public static void endpoints(DynamicPropertyRegistry registry) {

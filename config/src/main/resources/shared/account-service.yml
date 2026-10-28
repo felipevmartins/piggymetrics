@@ -15,13 +15,12 @@ spring:
     openfeign:
       circuitbreaker:
         enabled: true
-  data:
-    mongodb:
-      host: account-mongodb
-      username: user
-      password: ${MONGODB_PASSWORD}
-      database: piggymetrics
-      port: 27017
+  mongodb:
+    host: account-mongodb
+    username: user
+    password: ${MONGODB_PASSWORD}
+    database: piggymetrics
+    port: 27017
 
 server:
   servlet:

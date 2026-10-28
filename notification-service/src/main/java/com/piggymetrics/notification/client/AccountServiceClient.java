@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 @FeignClient(name = "account-service", url = "${clients.account-service.url:}", configuration = ServiceOAuthFeignConfiguration.class)
 public interface AccountServiceClient {
 
-	@RequestMapping(method = RequestMethod.GET, value = "/accounts/{accountName}", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)
+	@RequestMapping(method = RequestMethod.GET, value = "/accounts/{accountName}", consumes = MediaType.APPLICATION_JSON_VALUE)
 	String getAccount(@PathVariable("accountName") String accountName);
 
 }

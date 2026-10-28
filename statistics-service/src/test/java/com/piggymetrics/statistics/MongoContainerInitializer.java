@@ -29,6 +29,6 @@ public class MongoContainerInitializer implements ApplicationContextInitializer<
 
 	@Override
 	public void initialize(ConfigurableApplicationContext context) {
-		TestPropertyValues.of("spring.data.mongodb.uri=" + uri()).applyTo(context);
+		TestPropertyValues.of("spring.mongodb.uri=" + uri()).applyTo(context);
 	}
 }

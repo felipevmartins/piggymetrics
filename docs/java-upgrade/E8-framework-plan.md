@@ -381,3 +381,19 @@ F4m: `mongodb/Dockerfile` em `mongo:8.0`; `mongo` shell removido a partir do 6.0
 
 ### Recuperacao F4
 `git revert` dos commits F4a/F4m; tag `f3-final` (b6c02e1) e imagens `:f3` guardadas antes de reconstruir. Servidor MongoDB: volumes novos, nenhum volume existente tocado; voltar ao `mongo:4.4` exige volume novo ou dump (formato do 8.0 nao abre no 4.4 depois de FCV 8.0). Rollback nao ensaiado ate registro em contrario.
+
+### Resultado F4a (2026-10-27)
+- Build: `mvn -B -ntp -fae clean verify` verde (JDK Temurin 21.0.13), sem `skipTests`; `check_bytecode.py 65` ok em todos os modulos.
+- Testes: 119 antes (F3) / 119 depois; `compare_surefire.py after4 after5`: removed=0 added=0 not_passed=0. Os `ServiceOAuthClientContractTest` (account e notification) mantem as asserts originais.
+- Fluxos vivos (stack reconstruida, Mongo ainda 4.4): cadastro 200; login por authorization code + PKCE com `Location` `http://localhost/uaa/login`; token; `/accounts/current` 200 / sem token 401 / `ui` cria usuario 403; PUT account 200; notifications 200; gateway `/` 200 e rota desconhecida 404; Prometheus 3 alvos `up` e series resilience4j presentes; Grafana 200; mesmo traceId auth -> account.
+
+### Achados e correcoes F4a
+- Apache HttpClient 5 presente no classpath: o `RestClient` padrao do Spring Security 7 passa a usa-lo e ele repete um POST respondido com 503 (`HttpRequestRetryExec`), dobrando as chamadas ao emissor. Correcao: `ServiceOAuthClientConfiguration` (account e notification) usa `RestClientClientCredentialsTokenResponseClient` com `RestClient` sobre `JdkClientHttpRequestFactory`, conversor `OAuth2AccessTokenResponseHttpMessageConverter` e `OAuth2ErrorResponseErrorHandler`.
+- Tracing: no Boot 4 a autoconfiguracao do Brave vive em `spring-boot-micrometer-tracing-brave`; so com `micrometer-tracing-bridge-brave` os logs saem com traceId vazio. Dependencia adicionada nos 5 servicos.
+- `GET /statistics/current` retorna `[]` e o fallback de statistics do account loga erro: a API externa `api.exchangeratesapi.io` responde 401 `missing_access_key`. Nao e efeito do upgrade (dependencia externa sem chave); fica como pendencia.
+
+### Mudancas deliberadas F4a
+- `MediaType.APPLICATION_JSON_UTF8_VALUE` (removida) -> `APPLICATION_JSON_VALUE` (sem charset) nos clients Feign.
+- `org.hibernate.validator.constraints.Email` (removida) -> `jakarta.validation.constraints.Email` em `Recipient`.
+- Pacotes de slices de teste novos (`webmvc.test.autoconfigure`, `data.mongodb.test.autoconfigure`), `@MockBean` -> `@MockitoBean`, `spring.data.mongodb.*` -> `spring.mongodb.*`, `EndpointRequest` em `org.springframework.boot.security.autoconfigure.actuate.web.servlet`, `OAuth2AuthorizationServerConfigurer` instanciado diretamente (o metodo estatico `authorizationServer()` nao existe no Security 7).
+- Cliente de token OAuth sem repeticao automatica (JDK HttpClient) por contrato de teste: uma tentativa por chamada.
