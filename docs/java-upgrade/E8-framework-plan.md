@@ -448,7 +448,7 @@ Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anter
 
 ## F6 - Java 25: preparar a skill e validar no piloto (dependencias equivalentes)
 
-Estado: `pendente` (registrado em 2026-10-28; nada editado). Sai de `pendente` quando o usuario confirmar a ordem e a autorizacao dos revisores (decisoes abaixo).
+Estado: `em_execucao` (decisoes do usuario recebidas em 2026-10-28; ver "Decisoes do usuario"). Nenhum arquivo da skill nem do piloto editado ainda.
 
 ### Entrada
 `f5-final` (15745aa): Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, 119 testes verdes, `:f4` guardada. A skill `java-upgrade` (repo `agent-marketplace`, commit 2ac2008) cobre ate 21: `references/migration.md` so tem as transicoes 8->11, 11->17 e 17->21 (25 cai em "Outros destinos"), `sources.md` aponta guias Oracle do 21, `framework-major.md` ja cita major 69 para Java 25, `check_bytecode.py` ja aceita 69.
@@ -461,7 +461,7 @@ Estado: `pendente` (registrado em 2026-10-28; nada editado). Sai de `pendente` q
 5. Gates ja existentes bastam: `check_bytecode.py 69`, `compare_surefire.py` contra `after7`, fluxos vivos de F5, retorno para `:f4`.
 
 ### Matriz (alvo, a preencher apos ler as fontes)
-JDK de build e runtime: Temurin 25.x (patch a registrar). Bytecode 25 (major 69). Boot/Cloud: os atuais, salvo bloqueio provado. Dependencias fora do BOM: versao minima estavel documentada para 25, uma linha por item.
+JDK de build e runtime: GraalVM Community Edition 25.0.x (patch a registrar; 25.0.2 e a ultima lida nas notas, de 2026-01-20, patches posteriores nao verificados). Imagem de runtime candidata `ghcr.io/graalvm/jdk-community:25` (tags `25.0.2`, `25-ol9`; multi-arch; licenca open source dentro da imagem), a confirmar no pull. Alternativa: Oracle GraalVM 25 (GFTC, base Oracle JDK 25, inclui CPUs). Bytecode 25 (major 69). Boot/Cloud: os atuais, salvo bloqueio provado. Dependencias fora do BOM: versao minima estavel documentada para 25, uma linha por item.
 
 ### Mudanca pretendida
 F6a (skill, no repo `agent-marketplace`, branch propria): ampliar `migration.md`, `sources.md` e `framework-major.md`/novo trecho de dependencias equivalentes com fontes lidas; sem alterar o comportamento padrao (destino explicito continua mandando).
@@ -492,7 +492,13 @@ Cada item: o que faltou no processo, evidencia neste projeto e onde entraria na 
 14. Higiene operacional dos scripts de fluxo: rodar de um diretorio de rascunho para nao deixar `cj`/`login.html` no repo; notificacao de tarefa em background nao e fim do processo, verificar o processo. (`evidence.md`, nota curta)
 15. Escada de bytecode 8 -> 11 -> 17 -> 21 validada: nenhum degrau falhou por causa do `release` em si; as falhas vieram de framework e bibliotecas. Registrar como evidencia da regra "fundir degraus sem falha atribuivel". (`framework-major.md`)
 
-### Decisoes pendentes do usuario
-1. Ordem: skill primeiro e piloto depois, ou piloto primeiro e skill atualizada com evidencia real (recomendado: F6a minimo -> F6b -> F6c, por seguir contrato -> implementacao -> piloto -> publicacao).
-2. Autorizar o lancamento dos dois subagentes revisores que o `AGENTS.md` do repo da skill exige (sem autorizacao eles nao sao lancados e a mudanca da skill fica sem parecer).
-3. Escopo do JDK 25: so Temurin ou tambem outra distribuicao.
+### Decisoes do usuario (2026-10-28)
+1. Ordem: F6a minimo (skill) -> F6b (piloto no JDK 25) -> F6c (achados reais na skill).
+2. Subagentes revisores: so quando eu julgar necessario, nao obrigatoriamente a cada marco. A instrucao do usuario prevalece sobre o padrao do `AGENTS.md` do repo da skill; registrar no relatorio de cada marco se houve ou nao parecer e por que.
+3. JDK 25 em distribuicao que tambem ofereca GraalVM (o usuario pretende levar a aplicacao para Graal). Temurin deixa de ser restricao.
+
+### Escolha da distribuicao (fontes lidas em 2026-10-28)
+- https://www.graalvm.org/release-notes/JDK_25: GraalVM 25.0.0 (2025-09-16) em Oracle GraalVM (base Oracle JDK 25) e Community (base OpenJDK 25); CE 25.0.1 (2025-10-21, JDK 25.0.1+8) e 25.0.2 (2026-01-20, JDK 25.0.2+10). A pagina nao diz se 25 e LTS nem informa ciclo de suporte; isso vem do ciclo do JDK e precisa de fonte propria na F6a.
+- https://docs.oracle.com/en/graalvm/jdk/25/docs/support: Oracle GraalVM 25 sob GFTC (uso comercial e em producao permitido; redistribuicao sem taxa); inclui os CPUs do Oracle JDK; a pagina nao informa LTS, duracao de suporte nem cobertura Java SE.
+- https://github.com/graalvm/container: imagens `ghcr.io/graalvm/jdk-community` e `native-image-community` com tags `25`, `25.0.2`, `25-ol9`, amd64 e aarch64.
+- Decisao: GraalVM Community Edition 25 para build e runtime no piloto (open source, mesma distribuicao serve ao futuro `native-image`, imagens oficiais). Execucao no piloto continua sendo bytecode na JVM; Native Image e outro escopo (skill `graalvm-migrate`). Lacunas: licenca exata do CE (relatos divergentes, ler o arquivo LICENSE do pacote), patch atual de 25.0.x, equivalencia de CPUs entre CE e Oracle GraalVM.
