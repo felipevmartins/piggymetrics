@@ -508,3 +508,22 @@ Cada item: o que faltou no processo, evidencia neste projeto e onde entraria na 
 - Fontes lidas: guia Oracle 25 (indice, significant-changes 22-25, removed-apis, removed-tools; as paginas de removidos trazem so titulos), JEPs do JDK 25 (18, GA 2025-09-16), release notes GraalVM 25, suporte Oracle GraalVM 25, imagens CE. Lacunas: roadmap Oracle respondeu 403 (LTS 25 e datas de suporte vieram de busca, nao de leitura da pagina; por isso nao entram datas na skill); release notes do JDK 23 inacessiveis (processamento de anotacao desligado por padrao confirmado por busca e lista de discussao do OpenJDK, JDK-8321314); nao li o guia de migracao dos itens detalhados de seguranca.
 - Skill: linha 21->25, secao "Dependencias equivalentes no destino" (sem matriz estatica), "Riscos silenciosos apos um major", cobertura das fontes, fluxos vivos e higiene, retorno bidirecional e duas baselines. Licoes 1-15 aplicadas; licao 15 como evidencia, nao regra.
 - `python3 -m unittest discover -s scripts`: 17 testes ok. Revisores independentes: nao lancados (decisao 2 do usuario); mudanca e de texto de referencia, sem comportamento novo; revisar apos F6b (F6c).
+
+## F6b - Piloto no JDK 25 (em execucao)
+
+### Entrada
+HEAD `5f4a5ee` (worktree limpo para o diagnostico, pois o checkout principal tinha alteracoes do usuario: pagina de login propria no auth-service e ajustes em `gateway/static`, nao commitadas). JDK de build: GraalVM CE 25.0.2+10.1 (`$HOME/.cache/codex-java-upgrade/graalvm-ce-25.0.2/graalvm-community-openjdk-25.0.2+10.1`, tarball de github.com/graalvm/graalvm-ce-builds jdk-25.0.2, sha256 conferido, LICENSE.txt: GPLv2 com Classpath Exception, alguns modulos sob outras licencas). Maven 3.10.0.
+
+### Diagnostico (sem editar, `mvn -B -ntp -fae clean verify`, `release` 21)
+- Reactor inteiro SUCCESS em 1m35s; 119 testes, `compare_surefire.py` contra `after7`: removed=0 added=0 not_passed=0. O bytecode de 21 roda no JDK 25 sem alteracao.
+- Achado silencioso: o agente JaCoCo 0.8.11 registra `Unsupported class file major version 69` (1114 vezes) e `68` (90) ao instrumentar classes do proprio JDK 25 (`sun/util/resources/...`); os testes passam, a cobertura dessas classes e perdida. Classes da aplicacao (major 65) nao falham. Fonte: https://www.jacoco.org/jacoco/trunk/doc/changes.html (consultada 2026-10-28): 0.8.14 (2025/10/11) suporta oficialmente Java 25; 0.8.16 (2026/10/24) e a mais nova estavel.
+- Aviso do Mockito/Byte Buddy de agente dinamico persiste (preexistente).
+- Nao testado ainda: `release` 25 (bytecode major 69) e imagens JRE 25.
+
+### Mudanca
+1. `jacoco.version` 0.8.11 -> 0.8.14 (menor versao com suporte oficial ao Java 25), verificar ainda com `release` 21 no GraalVM 25.
+2. `java.version` 21 -> 25, depois gates: `check_bytecode.py 69`, `compare_surefire.py` vs `after7` (a pagina de login do usuario soma 1 teste, explicado), stack com imagens `ghcr.io/graalvm/jdk-community:25.0.2`, fluxos de F5, retorno para `:f4`.
+Recuperacao: `git revert` dos commits F6b, tag `f5-final`, imagens `:f4`.
+
+### Resultado F6b passo 1 (jacoco 0.8.14, release 21, GraalVM CE 25.0.2)
+`mvn -B -ntp -fae clean verify` BUILD SUCCESS; zero linhas `Unsupported class file major version`; `compare_surefire.py` vs `after7`: ver commit. Hipotese do JaCoCo confirmada para este projeto (erro some ao trocar so a versao).
