@@ -164,6 +164,5 @@ function showGreetingPage(account) {
 
 function showLoginForm() {
 	$("#loginpage").show();
-	$("#frontloginform").focus();
 	setTimeout(initialShaking, 700);
 }
