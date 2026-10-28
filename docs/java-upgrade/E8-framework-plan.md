@@ -412,7 +412,7 @@ F4m: `mongodb/Dockerfile` em `mongo:8.0`; `mongo` shell removido a partir do 6.0
 
 ## F5 - aceite do destino: imagens, compose completo, fluxos, retorno ensaiado, relatorio final
 
-Estado: `em_execucao` (registrado em 2026-10-28, antes de executar). Sem mudanca de codigo prevista; so evidencias, documentacao e eventuais correcoes que os gates apontarem (cada uma registrada).
+Estado: `concluida` (registrado em 2026-10-28, antes de executar; resultados abaixo). Sem mudanca de codigo prevista; so evidencias, documentacao e eventuais correcoes que os gates apontarem (cada uma registrada).
 
 ### Entrada
 Commit 3e7c6b4 (tag `f4-final`, f6cabc7): Boot 4.1.2, Cloud 2025.1.4, bytecode 21, MongoDB 8.0, 119 testes verdes. Imagens `:f3` e `:f4a` guardadas; as `:latest` atuais (Mongo 8.0) serao marcadas `:f4` antes de qualquer recriacao.
@@ -431,3 +431,17 @@ Nenhuma nova; as da F4 permanecem. Comparacao com a baseline original usa os XML
 
 ### Recuperacao F5
 Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anterior: tags `f4-final`, `f3-final`, imagens `:f3`/`:f4a`/`:f4`.
+
+### Resultado F5 (2026-10-28)
+- Testes: nenhuma mudanca de codigo; `clean verify` de `f4-final` verde (119 testes), bytecode 65 em todos os modulos. Contra a baseline original (110): removed=5 added=14 not_passed=0. Removidos: 3 de `OAuthTokenContractTest` com password grant (substituidos por authorization code + PKCE, passwordGrantIsNoLongerSupported, unknownTokenIsReportedInactive, wrongPasswordDoesNotAuthenticateTheUser; D4/F3) e `MonitoringApplicationTests`, `TurbineStreamServiceApplicationTests` (modulos removidos, D2/F1b). Adicionados: 3 contratos de resiliencia/balanceamento do account (F0/F1), 3 de roteamento do gateway (caracterizados em Zuul antes da F2) e 8 de auth (PKCE, escopos, introspeccao).
+- Fluxos vivos a partir de volumes vazios (compose + dev, imagens reconstruidas): cadastro 200; login code+PKCE; token; `/accounts/current` 200/401/403; PUT 200; notifications 200; gateway `/` 200 e rota desconhecida 404; Eureka com 5 apps; Prometheus 3 alvos up e series `resilience4j_circuitbreaker_*` (aparecem depois da primeira chamada ao breaker); Grafana 200 com datasource Prometheus; documento `demo` restaurado no Mongo 8.0; mesmo traceId auth -> account. Unico ERROR nos logs: API externa de cambio sem chave.
+- Retorno ensaiado em ambiente isolado (mesmo projeto compose, volumes novos): imagens `:f3` com Mongo 4.4.31 sobem e passam o fluxo; depois `:f4` com Mongo 8.0.34 sobem de volumes vazios e passam o fluxo. Primeira tentativa no `:f3` falhou no cadastro (nao no login): a stack tinha registrado 5 apps no Eureka mas o gateway ainda nao roteava para o account; `signup` foi repetido e passou nas tentativas seguintes. Dados nao migram entre 4.4 e 8.0; o retorno de dados e por volume novo ou dump.
+- Runtime das imagens: `eclipse-temurin:21-jre-jammy` (tag flutuante; observado 21.0.12.1), build com Temurin 21.0.13.
+
+### Pendencias finais
+- Login por authorization code nao exercitado em navegador real (so curl); dashboard Grafana nao validado visualmente.
+- API externa `exchangeratesapi.io` exige chave: estatisticas vazias (externo).
+- Retorno ensaiado com imagens, nao com rebuild a partir das tags git; volumes e dados de producao nao existem neste ambiente.
+- Tag da imagem JRE flutuante; fixar por digest em ambiente de entrega.
+- Restos de exclusoes Ribbon/Hystrix nos poms, palavra "legacy" em docs E6, teste automatico da regra do endpoint `prometheus`, reavaliar a execucao `isolated-resilience` e o aviso de auto-attach do Mockito.
+- Deploy em ambiente compartilhado nao autorizado por esta evidencia.
