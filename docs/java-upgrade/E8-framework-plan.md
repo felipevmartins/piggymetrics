@@ -448,7 +448,7 @@ Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anter
 
 ## F6 - Java 25: preparar a skill e validar no piloto (dependencias equivalentes)
 
-Estado: `em_execucao` (decisoes do usuario recebidas em 2026-10-28; ver "Decisoes do usuario"). Nenhum arquivo da skill nem do piloto editado ainda.
+Estado: `concluida` em 2026-10-28 (F6a, F6b, F6c). Decisoes do usuario abaixo.
 
 ### Entrada
 `f5-final` (15745aa): Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, 119 testes verdes, `:f4` guardada. A skill `java-upgrade` (repo `agent-marketplace`, commit 2ac2008) cobre ate 21: `references/migration.md` so tem as transicoes 8->11, 11->17 e 17->21 (25 cai em "Outros destinos"), `sources.md` aponta guias Oracle do 21, `framework-major.md` ja cita major 69 para Java 25, `check_bytecode.py` ja aceita 69.
@@ -509,7 +509,7 @@ Cada item: o que faltou no processo, evidencia neste projeto e onde entraria na 
 - Skill: linha 21->25, secao "Dependencias equivalentes no destino" (sem matriz estatica), "Riscos silenciosos apos um major", cobertura das fontes, fluxos vivos e higiene, retorno bidirecional e duas baselines. Licoes 1-15 aplicadas; licao 15 como evidencia, nao regra.
 - `python3 -m unittest discover -s scripts`: 17 testes ok. Revisores independentes: nao lancados (decisao 2 do usuario); mudanca e de texto de referencia, sem comportamento novo; revisar apos F6b (F6c).
 
-## F6b - Piloto no JDK 25 (em execucao)
+## F6b - Piloto no JDK 25 (concluida; tag `f6b-final`)
 
 ### Entrada
 HEAD `5f4a5ee` (worktree limpo para o diagnostico, pois o checkout principal tinha alteracoes do usuario: pagina de login propria no auth-service e ajustes em `gateway/static`, nao commitadas). JDK de build: GraalVM CE 25.0.2+10.1 (`$HOME/.cache/codex-java-upgrade/graalvm-ce-25.0.2/graalvm-community-openjdk-25.0.2+10.1`, tarball de github.com/graalvm/graalvm-ce-builds jdk-25.0.2, sha256 conferido, LICENSE.txt: GPLv2 com Classpath Exception, alguns modulos sob outras licencas). Maven 3.10.0.
@@ -539,3 +539,9 @@ Observado: aviso JEP 472 "restricted method in java.lang.System ... loadLibrary 
 - Retorno ensaiado: `piggymetrics-f6` removido com `-v`; `piggymetrics-f4r` com imagens `:f4` (JRE 21.0.12.1) e volumes novos: mesmos fluxos verdes. O sentido f4 -> f6b e o proprio build/up acima.
 - Nao feito: a pagina de login nova do usuario (nao commitada) nao esta nesta stack nem na comparacao; navegador real; digest da imagem.
 - Gates F6b: build verde sem skipTests; `check_bytecode.py 69` ok; `compare_surefire.py` vs `after7` 119/119 sem removidos/nao passados; fluxos vivos e retorno ensaiados.
+
+### Resultado F6c (2026-10-28)
+Skill (branch `feat/java-upgrade-jdk25-lessons`, commit e1e1421, sem push, `main` intacta): registrados o achado silencioso do JaCoCo (erros de agente com testes verdes; contar ocorrencias antes/depois), o aviso JEP 472 do Netty, o resultado "bytecode 21 roda no JDK 25 sem alteracao", a troca de imagem base (pacotes, usuario, curl do healthcheck, patch igual ao do build), o valor do gate de bytecode (pegou uma edicao nao gravada) e a regra de alteracoes alheias nao commitadas (worktree limpo, commit por caminho), alem do registro do que foi realmente pilotado (um projeto, Maven, Linux amd64/WSL2, sem Gradle nem Native Image). Testes da skill: 17 ok. Revisores independentes nao lancados (decisao 2); recomendavel um parecer antes de publicar a skill em `main`.
+
+### Pendencias F6
+Merge/publicacao da branch da skill (precisa de aprovacao); parecer independente opcional; digest da imagem GraalVM; decidir `--enable-native-access=ALL-UNNAMED`; commitar a pagina de login do usuario e validar no navegador; Native Image e outro escopo (`graalvm-migrate`); demais pendencias de F4/F5 seguem abertas.
