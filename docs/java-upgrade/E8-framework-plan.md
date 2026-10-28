@@ -347,3 +347,37 @@ F3b: auth-service reescrito no Spring Authorization Server (clientes browser, ac
 - `mongodb/Dockerfile` em `mongo:4.4` e interino; escada de servidor e migracao de dados na F4m.
 - `trusted-proxies` cobre faixas privadas; ajustar no deploy real. Rollback nao ensaiado (imagens `:f2` guardadas).
 - Termos "legacy" remanescentes em docs E6; teste automatizado da regra `prometheus`; HANDOFF.md a atualizar.
+
+## F4 - Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, Jackson 3, starters modulares; F4m servidor MongoDB
+
+Estado: `em_execucao` (registrado em 2026-10-27, antes de editar). Dividida em F4a (framework e bytecode 21) e F4m (servidor MongoDB do compose). Um commit verificado por parte, so com gates verdes, sem push.
+
+### Entrada
+Commit b6c02e1 (tag `f3-final`): Boot 3.5.16, Cloud 2025.0.3, bytecode 17, 119 testes verdes, fluxos vivos validados. Imagens `:f2` guardadas; imagens `:f3` serao marcadas antes de reconstruir.
+
+### Matriz (alvo)
+| Item | Versao | Fonte |
+| --- | --- | --- |
+| Spring Boot | 4.1.2 (Framework 7.0.10, Security 7.1.2, Tomcat 11.0.27, Jackson 3.1.7, Mockito 5.23.0, JUnit 6.0.3, Testcontainers 2.0.5, Micrometer 1.17.2, Micrometer Tracing 1.7.2, driver MongoDB 5.8.1) | `spring-boot-dependencies-4.1.2.pom` (Central) |
+| Spring Cloud | 2025.1.4: gateway 5.0.4, openfeign 5.0.4, commons 5.0.4, config 5.0.6, circuitbreaker 5.0.3, bus 5.0.4, netflix 5.0.3. O BOM declara `spring-boot.version` 4.0.9; a compatibilidade com Boot 4.1 vem da pagina do projeto (registrada acima), a confirmar pelos testes | `spring-cloud-dependencies-2025.1.4.pom` |
+| Bytecode / JDK | release 21 (major 65); build e runtime Temurin 21.0.13 | gate `check_bytecode.py 65` |
+| Servidor MongoDB (F4m) | alvo `mongo:8.0`: driver 5.8.1 e totalmente compativel com 4.2 a 8.3 (tabela oficial); 8.0 EOL em 2029-10 | https://www.mongodb.com/docs/drivers/compatibility.md |
+
+### Fontes oficiais lidas (2026-10-27)
+- Guia de migracao Boot 4.0 (https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide, lido ate 100000 de 124659 caracteres): starters `web` -> `webmvc`; `oauth2-resource-server`/`oauth2-authorization-server`/`oauth2-client` -> `security-oauth2-*`; starters de teste por tecnologia (`*-test`); Jackson 3 (`tools.jackson`, `jackson-annotations` mantem `com.fasterxml`); `spring.data.mongodb.*` -> `spring.mongodb.*` (host, port, database, username, password, authentication-database, uri); UUID e BigDecimal sem representacao padrao; `@MockBean`/`@SpyBean` removidos; `@SpringBootTest` sem MockMvc/TestRestTemplate sem anotacoes; probes liveness/readiness ligadas por padrao; modulos `spring-boot-micrometer-tracing-brave`; Authorization Server dentro do Spring Security.
+- Spring Cloud 2025.1 Release Notes (https://github.com/spring-cloud/spring-cloud-release/wiki/Spring-Cloud-2025.1-Release-Notes): so cita quebras por Jackson 3, JSpecify e Framework 7/Boot 4; detalhes por projeto nao estao na pagina.
+- Gateway Server WebFlux 5.0.4 (https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway-server-webflux/starter.html): `spring-cloud-starter-gateway-server-webflux`; a pagina nao documenta o prefixo das propriedades nem `trusted-proxies` (a conferir nos metadados do jar 5.0.4).
+- Lacuna: guia de migracao do Spring Security 7 e notas por projeto do Cloud (feign, circuitbreaker, config, eureka, bus) nao lidos; as falhas reais de compilacao/teste os cobrem e cada achado sera registrado.
+
+### Decisao de escopo
+O gateway permanece Spring Cloud Gateway reativo (decisao do usuario na F2); a linha "Gateway Server WebMVC" da escada fica superada. `feign-micrometer` e `trusted-proxies` da F3 sao revisados contra os jars 5.x.
+
+### Mudanca pretendida
+F4a: (1) pom raiz Boot 4.1.2/Cloud 2025.1.4 e `java.version` 21; (2) starters renomeados e starters de teste por tecnologia, modulo a modulo; (3) Jackson 3 onde o codigo usar `com.fasterxml.jackson.databind`; (4) propriedades `spring.data.mongodb.*` -> `spring.mongodb.*`, representacao explicita de UUID/BigDecimal se usados; (5) `@MockBean`/`@SpyBean` -> `@MockitoBean`/`@MockitoSpyBean`, MockMvc/TestRestTemplate com as anotacoes novas; (6) Spring Security 7 (`SecurityFilterChain` ja usado; ajustar o que o compilador e os testes apontarem); (7) propriedades de gateway, tracing, actuator e Testcontainers 2 renomeadas conforme os jars; (8) bytecode 21 e `check_bytecode.py 65`.
+F4m: `mongodb/Dockerfile` em `mongo:8.0`; `mongo` shell removido a partir do 6.0 -> `mongosh` em `init.sh`; restaurar o `dump` do repo, comparar leitura pelas aplicacoes e testes com `piggymetrics.test.mongo-image` no mesmo servidor. Dados dos volumes do `mongo:3` ja foram descartados na F3 (ambiente de desenvolvimento); nao havia dados a migrar alem do `dump` versionado.
+
+### Saida (gates)
+`mvn -B -ntp clean verify` exit 0 (JDK 21), sem `skipTests`; `check_bytecode.py 65`; `compare_surefire.py` contra a baseline F3 (after4) com identidades adicionadas/removidas/alteradas e motivo, `not_passed=0`; stack reconstruida com os mesmos fluxos vivos da F3 (login code+PKCE, cadastro, PUT account -> statistics, rotas, Prometheus, mesmo traceId); build, testes e fluxos registrados separadamente; commit sem push.
+
+### Recuperacao F4
+`git revert` dos commits F4a/F4m; tag `f3-final` (b6c02e1) e imagens `:f3` guardadas antes de reconstruir. Servidor MongoDB: volumes novos, nenhum volume existente tocado; voltar ao `mongo:4.4` exige volume novo ou dump (formato do 8.0 nao abre no 4.4 depois de FCV 8.0). Rollback nao ensaiado ate registro em contrario.
