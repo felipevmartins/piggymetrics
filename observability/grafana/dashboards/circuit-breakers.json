@@ -1,0 +1,97 @@
+{
+ "title": "PiggyMetrics circuit breakers",
+ "uid": "piggymetrics-cb",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "15s",
+ "time": {
+  "from": "now-30m",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "title": "Estado (1 = ativo)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 0
+   },
+   "targets": [
+    {
+     "expr": "resilience4j_circuitbreaker_state == 1",
+     "legendFormat": "{{name}} {{state}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Taxa de falha (%) (-1 = sem amostra minima)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 0
+   },
+   "targets": [
+    {
+     "expr": "resilience4j_circuitbreaker_failure_rate",
+     "legendFormat": "{{name}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Chamadas por segundo por resultado",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 8
+   },
+   "targets": [
+    {
+     "expr": "sum by (name, kind) (rate(resilience4j_circuitbreaker_calls_seconds_count[1m]))",
+     "legendFormat": "{{name}} {{kind}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "title": "Duracao maxima (s)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 8
+   },
+   "targets": [
+    {
+     "expr": "resilience4j_circuitbreaker_calls_seconds_max",
+     "legendFormat": "{{name}} {{kind}}",
+     "refId": "A"
+    }
+   ]
+  }
+ ]
+}

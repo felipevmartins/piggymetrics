@@ -4,7 +4,7 @@
 
 print('dump start');
 
-db.accounts.update(
+db.accounts.replaceOne(
     { "_id": "demo" },
     {
     "_id": "demo",

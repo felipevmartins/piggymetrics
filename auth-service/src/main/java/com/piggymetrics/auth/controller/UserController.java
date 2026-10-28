@@ -9,8 +9,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.security.Principal;
+import java.util.Collections;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/users")
@@ -20,11 +22,11 @@ public class UserController {
 	private UserService userService;
 
 	@RequestMapping(value = "/current", method = RequestMethod.GET)
-	public Principal getUser(Principal principal) {
-		return principal;
+	public Map<String, Object> getUser(Principal principal) {
+		return Collections.singletonMap("name", principal.getName());
 	}
 
-	@PreAuthorize("#oauth2.hasScope('server')")
+	@PreAuthorize("hasAuthority('SCOPE_server')")
 	@RequestMapping(method = RequestMethod.POST)
 	public void createUser(@Valid @RequestBody User user) {
 		userService.create(user);

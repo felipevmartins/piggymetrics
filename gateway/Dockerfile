@@ -1,4 +1,4 @@
-FROM java:8-jre
+FROM eclipse-temurin:21-jre-jammy
 MAINTAINER Alexander Lukyanchikov <sqshq@sqshq.com>
 
 ADD ./target/gateway.jar /app/

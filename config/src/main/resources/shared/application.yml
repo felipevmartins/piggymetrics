@@ -1,14 +1,9 @@
 logging:
   level:
     org.springframework.security: INFO
-
-hystrix:
-  command:
-    default:
-      execution:
-        isolation:
-          thread:
-            timeoutInMilliseconds: 10000
+  pattern:
+    correlation: "[${spring.application.name:},%X{traceId:-},%X{spanId:-}] "
+  include-application-name: false
 
 eureka:
   instance:
@@ -20,8 +15,15 @@ eureka:
 security:
   oauth2:
     resource:
-      user-info-uri: http://auth-service:5000/uaa/users/current
+      introspection-uri: http://auth-service:5000/uaa/oauth2/introspect
 
 spring:
   rabbitmq:
     host: rabbitmq
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

@@ -176,7 +176,7 @@ public interface StatisticsServiceClient {
 
 ### Monitor dashboard
 
-In this project configuration, each microservice with Hystrix on board pushes metrics to Turbine via Spring Cloud Bus (with AMQP broker). The Monitoring project is just a small Spring boot application with the [Turbine](https://github.com/Netflix/Turbine) and [Hystrix Dashboard](https://github.com/Netflix-Skunkworks/hystrix-dashboard).
+Circuit breakers are now Spring Cloud CircuitBreaker (Resilience4j). Account, Statistics and Notification services expose Micrometer metrics at `/actuator/prometheus` on the management port 9100 (reachable only inside the compose network). Prometheus scrapes them and Grafana shows the `PiggyMetrics circuit breakers` dashboard (state, failure rate, calls per result). The former Hystrix Dashboard and Turbine modules were removed; the screenshots and the Hystrix text below describe the original setup.
 
 Let's see observe the behavior of our system under load: Statistics Service imitates a delay during the request processing. The response timeout is set to 1 second:
 
@@ -230,7 +230,8 @@ Note that starting 8 Spring Boot applications, 4 MongoDB instances and a RabbitM
 #### Before you start
 - Install Docker and Docker Compose.
 - Change environment variable values in `.env` file for more security or leave it as it is.
-- Build the project: `mvn package [-DskipTests]`
+- Use a JDK 8 installation (`mvn -version` must report Java 1.8). With SDKMAN, run `sdk use java 8.0.482.1-sem` if this version is installed.
+- Build and run all tests: `mvn clean package`. Tests use embedded MongoDB, a local exchange-rate HTTP server, and an in-memory stream binder; Config Server, Eureka, and RabbitMQ do not need to be running. Maven dependencies and the embedded MongoDB binary may need to be downloaded on the first run.
 
 #### Production mode
 In this mode, all latest images will be pulled from Docker Hub.
@@ -246,7 +247,8 @@ If you'd like to start applications in Intellij Idea you need to either use [Env
 #### Important endpoints
 - http://localhost:80 - Gateway
 - http://localhost:8761 - Eureka Dashboard
-- http://localhost:9000/hystrix - Hystrix Dashboard (Turbine stream link: `http://turbine-stream-service:8080/turbine/turbine.stream`)
+- http://localhost:9090 - Prometheus
+- http://localhost:3000 - Grafana (default login/password: admin/admin)
 - http://localhost:15672 - RabbitMq management (default login/password: guest/guest)
 
 ## Contributions are welcome!

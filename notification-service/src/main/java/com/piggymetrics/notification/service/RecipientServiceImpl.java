@@ -22,7 +22,7 @@ public class RecipientServiceImpl implements RecipientService {
 
 	@Override
 	public Recipient findByAccountName(String accountName) {
-		Assert.hasLength(accountName);
+		Assert.hasLength(accountName, "[Assertion failed] - this String argument must have length; it must not be null or empty");
 		return repository.findByAccountName(accountName);
 	}
 

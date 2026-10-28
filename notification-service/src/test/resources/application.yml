@@ -12,10 +12,6 @@ backup:
     attachment: backup.json
 
 spring:
-  data:
-    mongodb:
-      database: piggymetrics
-      port: 0
   mail:
     host: smtp.gmail.com
     port: 465
@@ -31,3 +27,29 @@ spring:
             fallback: false
           ssl:
             enable: true
+
+---
+eureka:
+  client:
+    enabled: false
+
+spring:
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+
+# Explicit fixture when Config Server is disabled; no production credentials.
+security:
+  oauth2:
+    client:
+      clientId: notification-service
+      clientSecret: contract-secret
+      accessTokenUri: http://127.0.0.1:1/oauth2/token
+      grant-type: client_credentials
+      scope: server
+    resource:
+      introspection-uri: http://127.0.0.1:1/oauth2/introspect
+      client-id: notification-service
+      client-secret: contract-secret

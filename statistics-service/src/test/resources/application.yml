@@ -1,16 +1,21 @@
-hystrix:
-  command:
-    default:
-      execution:
-        isolation:
-          thread:
-            timeoutInMilliseconds: 20000
-
-spring:
-  data:
-    mongodb:
-      database: piggymetrics
-      port: 0
-
 rates:
   url: https://api.exchangeratesapi.io
+---
+eureka:
+  client:
+    enabled: false
+
+spring:
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+
+# Explicit local fixture when Config Server is disabled; production keeps its configured introspection URI.
+security:
+  oauth2:
+    resource:
+      introspection-uri: http://127.0.0.1:1/oauth2/introspect
+      client-id: account-service
+      client-secret: contract-secret

@@ -5,11 +5,11 @@ import com.piggymetrics.notification.domain.Frequency;
 import com.piggymetrics.notification.domain.NotificationSettings;
 import com.piggymetrics.notification.domain.NotificationType;
 import com.piggymetrics.notification.domain.Recipient;
-import org.apache.commons.lang.time.DateUtils;
+import java.time.ZonedDateTime;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest;
+import org.springframework.boot.data.mongodb.test.autoconfigure.DataMongoTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.Date;
@@ -74,7 +74,7 @@ public class RecipientRepositoryTest {
 		NotificationSettings remind = new NotificationSettings();
 		remind.setActive(true);
 		remind.setFrequency(Frequency.WEEKLY);
-		remind.setLastNotified(DateUtils.addDays(new Date(), -8));
+		remind.setLastNotified(Date.from(ZonedDateTime.now().minusDays(8).toInstant()));
 
 		Recipient recipient = new Recipient();
 		recipient.setAccountName("test");
@@ -95,7 +95,7 @@ public class RecipientRepositoryTest {
 		NotificationSettings remind = new NotificationSettings();
 		remind.setActive(true);
 		remind.setFrequency(Frequency.WEEKLY);
-		remind.setLastNotified(DateUtils.addDays(new Date(), -1));
+		remind.setLastNotified(Date.from(ZonedDateTime.now().minusDays(1).toInstant()));
 
 		Recipient recipient = new Recipient();
 		recipient.setAccountName("test");
@@ -116,7 +116,7 @@ public class RecipientRepositoryTest {
 		NotificationSettings remind = new NotificationSettings();
 		remind.setActive(false);
 		remind.setFrequency(Frequency.WEEKLY);
-		remind.setLastNotified(DateUtils.addDays(new Date(), -30));
+		remind.setLastNotified(Date.from(ZonedDateTime.now().minusDays(30).toInstant()));
 
 		Recipient recipient = new Recipient();
 		recipient.setAccountName("test");
@@ -137,7 +137,7 @@ public class RecipientRepositoryTest {
 		NotificationSettings remind = new NotificationSettings();
 		remind.setActive(true);
 		remind.setFrequency(Frequency.QUARTERLY);
-		remind.setLastNotified(DateUtils.addDays(new Date(), -91));
+		remind.setLastNotified(Date.from(ZonedDateTime.now().minusDays(91).toInstant()));
 
 		Recipient recipient = new Recipient();
 		recipient.setAccountName("test");

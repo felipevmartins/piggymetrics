@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.security.Principal;
 
 @RestController
@@ -16,7 +16,7 @@ public class AccountController {
 	@Autowired
 	private AccountService accountService;
 
-	@PreAuthorize("#oauth2.hasScope('server') or #name.equals('demo')")
+	@PreAuthorize("hasAuthority('SCOPE_server') or #name.equals('demo')")
 	@RequestMapping(path = "/{name}", method = RequestMethod.GET)
 	public Account getAccountByName(@PathVariable String name) {
 		return accountService.findByName(name);
