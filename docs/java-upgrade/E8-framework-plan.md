@@ -457,7 +457,8 @@ Estado: `pendente` (registrado em 2026-10-28; nada editado). Sai de `pendente` q
 1. Skill: linha de transicao 21 -> 25 (JEPs entregues em 22 a 25 que mudam comportamento ou removem API), guia de migracao Oracle do 25, notas de release do JDK 25 da distribuicao usada, ciclo de suporte do LTS 25 (para a regra "recomendar LTS suportado").
 2. Skill: procedimento de "versoes equivalentes das dependencias": como achar, para cada dependencia/plugin/agente de bytecode, a menor versao estavel documentada para o JDK de destino (BOM do framework primeiro, depois o que o BOM nao gerencia: JaCoCo, Byte Buddy/Mockito, ASM, Lombok, plugins Maven, Testcontainers e imagens), com fonte e data. Sem matriz estatica de versoes.
 3. Piloto, candidatos a bloquear (hipoteses a provar no JDK 25, nao fatos): `jacoco.version` 0.8.11 nas tres apps (versoes antigas leem ate um major limitado), maven-compiler/surefire, Mockito/Byte Buddy auto-attach (aviso ja registrado), Flapdoodle ja removido, imagens `eclipse-temurin:21-jre-jammy` e Temurin 25 para build, e o proprio Boot 4.1.2 (fonte do plano: ate Java 27; reconferir).
-4. Gates ja existentes bastam: `check_bytecode.py 69`, `compare_surefire.py` contra `after7`, fluxos vivos de F5, retorno para `:f4`.
+4. Skill: lacunas detectadas no processo F0-F5 (secao "Licoes F0-F5 para a skill" abaixo), a aplicar em F6a/F6c.
+5. Gates ja existentes bastam: `check_bytecode.py 69`, `compare_surefire.py` contra `after7`, fluxos vivos de F5, retorno para `:f4`.
 
 ### Matriz (alvo, a preencher apos ler as fontes)
 JDK de build e runtime: Temurin 25.x (patch a registrar). Bytecode 25 (major 69). Boot/Cloud: os atuais, salvo bloqueio provado. Dependencias fora do BOM: versao minima estavel documentada para 25, uma linha por item.
@@ -465,13 +466,31 @@ JDK de build e runtime: Temurin 25.x (patch a registrar). Bytecode 25 (major 69)
 ### Mudanca pretendida
 F6a (skill, no repo `agent-marketplace`, branch propria): ampliar `migration.md`, `sources.md` e `framework-major.md`/novo trecho de dependencias equivalentes com fontes lidas; sem alterar o comportamento padrao (destino explicito continua mandando).
 F6b (piloto, neste repo): diagnostico no JDK 25 sem editar (`mvn -fae clean verify`), prova do bloqueio por modulo, correcao minima de versoes (a skill manda tentar a menor mudanca antes de trocar framework), depois `java.version` 25, imagens JRE 25, gates e fluxos de F5.
-F6c: registrar o que o piloto mostrou na skill (achados reais, nao previstos), reavaliar o contrato.
+F6a tambem aplica as licoes F0-F5 (abaixo); F6c: registrar o que o piloto mostrou na skill (achados reais, nao previstos), reavaliar o contrato.
 
 ### Saida (gates)
 Piloto: `clean verify` verde no JDK 25 sem `skipTests`; `check_bytecode.py 69`; `compare_surefire.py` vs `after7` sem remocoes nem `not_passed`; stack reconstruida com os fluxos vivos de F5; retorno para `:f4` ensaiado. Skill: `AGENTS.md` do repo exige dois pareceres sequenciais de subagentes a cada marco (contrato, implementacao, piloto, publicacao), com respostas aos achados registradas; testes da skill (`test_compare_surefire.py`) verdes. Build, testes e fluxos registrados separadamente; nada de push nem deploy.
 
 ### Recuperacao F6
 Piloto: `git revert` dos commits F6b, tag `f5-final`, imagens `:f4`. Skill: branch propria no `agent-marketplace`, nenhuma alteracao em `main` sem aprovacao.
+
+### Licoes F0-F5 para a skill (propostas; nada aplicado ainda)
+Cada item: o que faltou no processo, evidencia neste projeto e onde entraria na skill (`references/` do `agent-marketplace`).
+1. BOM do train x framework escolhido: Cloud 2025.1.4 declara Boot 4.0.9 enquanto o alvo e 4.1.2; a compatibilidade so veio da pagina do projeto e dos testes. Registrar "versao que o BOM declara" ao lado da escolhida e tratar como hipotese ate o reactor passar. (`framework-major.md`, fontes e versoes)
+2. Troca silenciosa de cliente HTTP/transporte: o `RestClient` padrao escolhe Apache HttpClient 5 se estiver no classpath, que repete um POST com 503 e dobrou as chamadas ao emissor de tokens (F4a). Apos um major, revisar cliente HTTP padrao, retry, timeouts e contagem de chamadas, e manter testes de contagem de chamadas como contrato. (`framework-major.md`, riscos silenciosos)
+3. Observabilidade pode quebrar com testes verdes: trace ids vazios no Boot 4 por falta do modulo `spring-boot-micrometer-tracing-brave` (F4a); `feign-micrometer` ausente quebrou o traceId entre servicos (F3). O gate de fluxos vivos deve incluir correlacao de traces, `/actuator/prometheus` e series esperadas. (`evidence.md`/`framework-major.md`)
+4. Defaults de seguranca que mudam redirects e cabecalhos: `trusted-proxies` do gateway sem default gerou `Location` com host interno (F3). Fluxos vivos devem seguir redirects de login como um navegador, nao so status. (`framework-major.md`)
+5. Artefatos auxiliares de dados e imagens: `mongo` shell removido (mongosh), `update()` com documento de substituicao rejeitado, `--force-yes` do apt removido, dump reaplicado em loop infinito de retry (F4m). Checklist: scripts de init, dumps, healthchecks, Dockerfile e entrypoints do servidor de dados. (`framework-major.md`, "Dados")
+6. Volumes de versao antiga nao abrem no servidor novo (mongo:3 -> 4.4 -> 8.0): usar volumes novos e documentar que o retorno de dados e por dump/volume, nao por `git revert`. (`framework-major.md`, `migration.md` retorno)
+7. Prontidao em partida a frio: Eureka com 5 apps nao significa gateway roteando; o primeiro cadastro falhou no rehearsal de retorno. Esperar o primeiro fluxo de negocio responder 200 antes de medir. (`evidence.md`)
+8. Estado em memoria e caches: tokens em memoria invalidados no restart, cache de load balancer do gateway obsoleto apos reiniciar dependentes. Registrar como risco operacional e reiniciar na ordem. (`framework-major.md`, riscos)
+9. Substituicao de infra de teste: Flapdoodle -> Testcontainers exige Docker no gate e imagem do servidor de teste igual a do runtime (`piggymetrics.test.mongo-image`). (`framework-major.md`, entrada)
+10. Comparacao em duas baselines: `compare_surefire.py` contra a etapa anterior E contra a baseline original, com removidos/adicionados explicados (F5). (`SKILL.md`/`evidence.md`)
+11. Cobertura das fontes: guia de migracao lido so ate 100000 de 124659 caracteres e paginas sem os dados necessarios (prefixo de propriedades do gateway). Registrar trecho lido, lacunas e que as falhas reais cobrem o resto. (`sources.md`, `checkpoints.md`)
+12. Imagem de runtime flutuante: JRE 21.0.12.1 na imagem x JDK de build 21.0.13. Registrar patch de ambos e fixar por digest na entrega. (`SKILL.md`, contrato e diagnostico)
+13. Rollback por etapa funcionou: tags de git e de imagem por etapa (`:f3`, `:f4a`) e ensaio nos dois sentidos. Tornar o padrao de nomeacao e o ensaio bidirecional parte da etapa de retorno. (`framework-major.md`, gates)
+14. Higiene operacional dos scripts de fluxo: rodar de um diretorio de rascunho para nao deixar `cj`/`login.html` no repo; notificacao de tarefa em background nao e fim do processo, verificar o processo. (`evidence.md`, nota curta)
+15. Escada de bytecode 8 -> 11 -> 17 -> 21 validada: nenhum degrau falhou por causa do `release` em si; as falhas vieram de framework e bibliotecas. Registrar como evidencia da regra "fundir degraus sem falha atribuivel". (`framework-major.md`)
 
 ### Decisoes pendentes do usuario
 1. Ordem: skill primeiro e piloto depois, ou piloto primeiro e skill atualizada com evidencia real (recomendado: F6a minimo -> F6b -> F6c, por seguir contrato -> implementacao -> piloto -> publicacao).
