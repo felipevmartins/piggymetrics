@@ -445,3 +445,35 @@ Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anter
 - Tag da imagem JRE flutuante; fixar por digest em ambiente de entrega.
 - Restos de exclusoes Ribbon/Hystrix nos poms, palavra "legacy" em docs E6, teste automatico da regra do endpoint `prometheus`, reavaliar a execucao `isolated-resilience` e o aviso de auto-attach do Mockito.
 - Deploy em ambiente compartilhado nao autorizado por esta evidencia.
+
+## F6 - Java 25: preparar a skill e validar no piloto (dependencias equivalentes)
+
+Estado: `pendente` (registrado em 2026-10-28; nada editado). Sai de `pendente` quando o usuario confirmar a ordem e a autorizacao dos revisores (decisoes abaixo).
+
+### Entrada
+`f5-final` (15745aa): Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, 119 testes verdes, `:f4` guardada. A skill `java-upgrade` (repo `agent-marketplace`, commit 2ac2008) cobre ate 21: `references/migration.md` so tem as transicoes 8->11, 11->17 e 17->21 (25 cai em "Outros destinos"), `sources.md` aponta guias Oracle do 21, `framework-major.md` ja cita major 69 para Java 25, `check_bytecode.py` ja aceita 69.
+
+### Lacunas conhecidas (a confirmar na fonte, nao assumidas)
+1. Skill: linha de transicao 21 -> 25 (JEPs entregues em 22 a 25 que mudam comportamento ou removem API), guia de migracao Oracle do 25, notas de release do JDK 25 da distribuicao usada, ciclo de suporte do LTS 25 (para a regra "recomendar LTS suportado").
+2. Skill: procedimento de "versoes equivalentes das dependencias": como achar, para cada dependencia/plugin/agente de bytecode, a menor versao estavel documentada para o JDK de destino (BOM do framework primeiro, depois o que o BOM nao gerencia: JaCoCo, Byte Buddy/Mockito, ASM, Lombok, plugins Maven, Testcontainers e imagens), com fonte e data. Sem matriz estatica de versoes.
+3. Piloto, candidatos a bloquear (hipoteses a provar no JDK 25, nao fatos): `jacoco.version` 0.8.11 nas tres apps (versoes antigas leem ate um major limitado), maven-compiler/surefire, Mockito/Byte Buddy auto-attach (aviso ja registrado), Flapdoodle ja removido, imagens `eclipse-temurin:21-jre-jammy` e Temurin 25 para build, e o proprio Boot 4.1.2 (fonte do plano: ate Java 27; reconferir).
+4. Gates ja existentes bastam: `check_bytecode.py 69`, `compare_surefire.py` contra `after7`, fluxos vivos de F5, retorno para `:f4`.
+
+### Matriz (alvo, a preencher apos ler as fontes)
+JDK de build e runtime: Temurin 25.x (patch a registrar). Bytecode 25 (major 69). Boot/Cloud: os atuais, salvo bloqueio provado. Dependencias fora do BOM: versao minima estavel documentada para 25, uma linha por item.
+
+### Mudanca pretendida
+F6a (skill, no repo `agent-marketplace`, branch propria): ampliar `migration.md`, `sources.md` e `framework-major.md`/novo trecho de dependencias equivalentes com fontes lidas; sem alterar o comportamento padrao (destino explicito continua mandando).
+F6b (piloto, neste repo): diagnostico no JDK 25 sem editar (`mvn -fae clean verify`), prova do bloqueio por modulo, correcao minima de versoes (a skill manda tentar a menor mudanca antes de trocar framework), depois `java.version` 25, imagens JRE 25, gates e fluxos de F5.
+F6c: registrar o que o piloto mostrou na skill (achados reais, nao previstos), reavaliar o contrato.
+
+### Saida (gates)
+Piloto: `clean verify` verde no JDK 25 sem `skipTests`; `check_bytecode.py 69`; `compare_surefire.py` vs `after7` sem remocoes nem `not_passed`; stack reconstruida com os fluxos vivos de F5; retorno para `:f4` ensaiado. Skill: `AGENTS.md` do repo exige dois pareceres sequenciais de subagentes a cada marco (contrato, implementacao, piloto, publicacao), com respostas aos achados registradas; testes da skill (`test_compare_surefire.py`) verdes. Build, testes e fluxos registrados separadamente; nada de push nem deploy.
+
+### Recuperacao F6
+Piloto: `git revert` dos commits F6b, tag `f5-final`, imagens `:f4`. Skill: branch propria no `agent-marketplace`, nenhuma alteracao em `main` sem aprovacao.
+
+### Decisoes pendentes do usuario
+1. Ordem: skill primeiro e piloto depois, ou piloto primeiro e skill atualizada com evidencia real (recomendado: F6a minimo -> F6b -> F6c, por seguir contrato -> implementacao -> piloto -> publicacao).
+2. Autorizar o lancamento dos dois subagentes revisores que o `AGENTS.md` do repo da skill exige (sem autorizacao eles nao sao lancados e a mudanca da skill fica sem parecer).
+3. Escopo do JDK 25: so Temurin ou tambem outra distribuicao.
