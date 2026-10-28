@@ -448,7 +448,7 @@ Nenhuma mudanca de codigo; volumes de desenvolvimento descartaveis. Estado anter
 
 ## F6 - Java 25: preparar a skill e validar no piloto (dependencias equivalentes)
 
-Estado: `em_execucao` (decisoes do usuario recebidas em 2026-10-28; ver "Decisoes do usuario"). Nenhum arquivo da skill nem do piloto editado ainda.
+Estado: `concluida` em 2026-10-28 (F6a, F6b, F6c). Decisoes do usuario abaixo.
 
 ### Entrada
 `f5-final` (15745aa): Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, 119 testes verdes, `:f4` guardada. A skill `java-upgrade` (repo `agent-marketplace`, commit 2ac2008) cobre ate 21: `references/migration.md` so tem as transicoes 8->11, 11->17 e 17->21 (25 cai em "Outros destinos"), `sources.md` aponta guias Oracle do 21, `framework-major.md` ja cita major 69 para Java 25, `check_bytecode.py` ja aceita 69.
@@ -502,3 +502,46 @@ Cada item: o que faltou no processo, evidencia neste projeto e onde entraria na 
 - https://docs.oracle.com/en/graalvm/jdk/25/docs/support: Oracle GraalVM 25 sob GFTC (uso comercial e em producao permitido; redistribuicao sem taxa); inclui os CPUs do Oracle JDK; a pagina nao informa LTS, duracao de suporte nem cobertura Java SE.
 - https://github.com/graalvm/container: imagens `ghcr.io/graalvm/jdk-community` e `native-image-community` com tags `25`, `25.0.2`, `25-ol9`, amd64 e aarch64.
 - Decisao: GraalVM Community Edition 25 para build e runtime no piloto (open source, mesma distribuicao serve ao futuro `native-image`, imagens oficiais). Execucao no piloto continua sendo bytecode na JVM; Native Image e outro escopo (skill `graalvm-migrate`). Lacunas: licenca exata do CE (relatos divergentes, ler o arquivo LICENSE do pacote), patch atual de 25.0.x, equivalencia de CPUs entre CE e Oracle GraalVM.
+
+### Resultado F6a (2026-10-28)
+- Branch `feat/java-upgrade-jdk25-lessons` em `agent-marketplace` (sem push, `main` intacta). Editados: `SKILL.md`, `references/{migration,sources,framework-major,evidence}.md`.
+- Fontes lidas: guia Oracle 25 (indice, significant-changes 22-25, removed-apis, removed-tools; as paginas de removidos trazem so titulos), JEPs do JDK 25 (18, GA 2025-09-16), release notes GraalVM 25, suporte Oracle GraalVM 25, imagens CE. Lacunas: roadmap Oracle respondeu 403 (LTS 25 e datas de suporte vieram de busca, nao de leitura da pagina; por isso nao entram datas na skill); release notes do JDK 23 inacessiveis (processamento de anotacao desligado por padrao confirmado por busca e lista de discussao do OpenJDK, JDK-8321314); nao li o guia de migracao dos itens detalhados de seguranca.
+- Skill: linha 21->25, secao "Dependencias equivalentes no destino" (sem matriz estatica), "Riscos silenciosos apos um major", cobertura das fontes, fluxos vivos e higiene, retorno bidirecional e duas baselines. Licoes 1-15 aplicadas; licao 15 como evidencia, nao regra.
+- `python3 -m unittest discover -s scripts`: 17 testes ok. Revisores independentes: nao lancados (decisao 2 do usuario); mudanca e de texto de referencia, sem comportamento novo; revisar apos F6b (F6c).
+
+## F6b - Piloto no JDK 25 (concluida; tag `f6b-final`)
+
+### Entrada
+HEAD `5f4a5ee` (worktree limpo para o diagnostico, pois o checkout principal tinha alteracoes do usuario: pagina de login propria no auth-service e ajustes em `gateway/static`, nao commitadas). JDK de build: GraalVM CE 25.0.2+10.1 (`$HOME/.cache/codex-java-upgrade/graalvm-ce-25.0.2/graalvm-community-openjdk-25.0.2+10.1`, tarball de github.com/graalvm/graalvm-ce-builds jdk-25.0.2, sha256 conferido, LICENSE.txt: GPLv2 com Classpath Exception, alguns modulos sob outras licencas). Maven 3.10.0.
+
+### Diagnostico (sem editar, `mvn -B -ntp -fae clean verify`, `release` 21)
+- Reactor inteiro SUCCESS em 1m35s; 119 testes, `compare_surefire.py` contra `after7`: removed=0 added=0 not_passed=0. O bytecode de 21 roda no JDK 25 sem alteracao.
+- Achado silencioso: o agente JaCoCo 0.8.11 registra `Unsupported class file major version 69` (1114 vezes) e `68` (90) ao instrumentar classes do proprio JDK 25 (`sun/util/resources/...`); os testes passam, a cobertura dessas classes e perdida. Classes da aplicacao (major 65) nao falham. Fonte: https://www.jacoco.org/jacoco/trunk/doc/changes.html (consultada 2026-10-28): 0.8.14 (2025/10/11) suporta oficialmente Java 25; 0.8.16 (2026/10/24) e a mais nova estavel.
+- Aviso do Mockito/Byte Buddy de agente dinamico persiste (preexistente).
+- Nao testado ainda: `release` 25 (bytecode major 69) e imagens JRE 25.
+
+### Mudanca
+1. `jacoco.version` 0.8.11 -> 0.8.14 (menor versao com suporte oficial ao Java 25), verificar ainda com `release` 21 no GraalVM 25.
+2. `java.version` 21 -> 25, depois gates: `check_bytecode.py 69`, `compare_surefire.py` vs `after7` (a pagina de login do usuario soma 1 teste, explicado), stack com imagens `ghcr.io/graalvm/jdk-community:25.0.2`, fluxos de F5, retorno para `:f4`.
+Recuperacao: `git revert` dos commits F6b, tag `f5-final`, imagens `:f4`.
+
+### Resultado F6b passo 1 (jacoco 0.8.14, release 21, GraalVM CE 25.0.2)
+`mvn -B -ntp -fae clean verify` BUILD SUCCESS; zero linhas `Unsupported class file major version`; `compare_surefire.py` vs `after7`: ver commit. Hipotese do JaCoCo confirmada para este projeto (erro some ao trocar so a versao).
+
+### Resultado F6b passo 2 (java.version 25, GraalVM CE 25.0.2)
+`mvn -B -ntp -fae clean verify` BUILD SUCCESS (worktree limpo em 4227b2a + `java.version` 25); `check_bytecode.py 69` ok em todos os modulos (classes e test-classes major 69); `compare_surefire.py` vs `after7` (HEAD sem a pagina de login): before=119 after=119 removed=0 added=0 not_passed=0. Zero `Unsupported class file major version`.
+Observado: aviso JEP 472 "restricted method in java.lang.System ... loadLibrary ... io.netty.util.internal.NativeLibraryUtil" (Netty 4.2.19, tambem com release 21 no JDK 25); `--enable-native-access=ALL-UNNAMED` o silenciaria, nao aplicado (aviso, nao falha; decidir se vale na entrega). Aviso do agente dinamico do Byte Buddy/Mockito persiste. Falta: imagens, stack, fluxos, retorno.
+
+### Resultado F6b passo 3 (imagens e stack, 2026-10-28)
+- Dockerfiles dos 7 servicos: `FROM ghcr.io/graalvm/jdk-community:25.0.2` (JDK completo, Oracle Linux 10.1, `java -version` GraalVM CE 25.0.2+10.1, `curl` presente para o HEALTHCHECK do config). Imagem de runtime = mesmo patch do JDK de build. Tag fixa de patch, nao digest (pendente para a entrega).
+- Stack reconstruida a partir de worktree limpo (3 commits de F6b + Dockerfiles), projeto `piggymetrics-f6`, volumes novos, imagens tagueadas `:f6b`. `flow.sh` (F5): cadastro 200, login code+PKCE com redirecionamentos, token, `current` 200 / sem token 401 / escopo 403, PUT 200, notifications 200, gateway `/` 200 e rota desconhecida 404; Eureka com as 5 apps; Prometheus 3 targets up; trace ids presentes nos logs de account.
+- Erros nos logs, todos conhecidos: `exchangeratesapi.io` 401 `missing_access_key` (account fallback e statistics) e `503 Load balancer does not contain an instance for auth-service` num POST de aquecimento antes de o auth registrar (partida a frio). Aviso JEP 472 do Netty no gateway.
+- Retorno ensaiado: `piggymetrics-f6` removido com `-v`; `piggymetrics-f4r` com imagens `:f4` (JRE 21.0.12.1) e volumes novos: mesmos fluxos verdes. O sentido f4 -> f6b e o proprio build/up acima.
+- Nao feito: a pagina de login nova do usuario (nao commitada) nao esta nesta stack nem na comparacao; navegador real; digest da imagem.
+- Gates F6b: build verde sem skipTests; `check_bytecode.py 69` ok; `compare_surefire.py` vs `after7` 119/119 sem removidos/nao passados; fluxos vivos e retorno ensaiados.
+
+### Resultado F6c (2026-10-28)
+Skill (branch `feat/java-upgrade-jdk25-lessons`, commit e1e1421, sem push, `main` intacta): registrados o achado silencioso do JaCoCo (erros de agente com testes verdes; contar ocorrencias antes/depois), o aviso JEP 472 do Netty, o resultado "bytecode 21 roda no JDK 25 sem alteracao", a troca de imagem base (pacotes, usuario, curl do healthcheck, patch igual ao do build), o valor do gate de bytecode (pegou uma edicao nao gravada) e a regra de alteracoes alheias nao commitadas (worktree limpo, commit por caminho), alem do registro do que foi realmente pilotado (um projeto, Maven, Linux amd64/WSL2, sem Gradle nem Native Image). Testes da skill: 17 ok. Revisores independentes nao lancados (decisao 2); recomendavel um parecer antes de publicar a skill em `main`.
+
+### Pendencias F6
+Merge/publicacao da branch da skill (precisa de aprovacao); parecer independente opcional; digest da imagem GraalVM; decidir `--enable-native-access=ALL-UNNAMED`; commitar a pagina de login do usuario e validar no navegador; Native Image e outro escopo (`graalvm-migrate`); demais pendencias de F4/F5 seguem abertas.

@@ -477,7 +477,7 @@ input[id="backmailform"] {
 	width: 296px;
 	top: 140px;
 }
-.regbutton, .demobutton, .mailbutton {
+.regbutton, .demobutton, .mailbutton, .signinbutton {
 	cursor: pointer;
 	position: relative;
 	background-color: white;
@@ -487,10 +487,10 @@ input[id="backmailform"] {
 	text-shadow: 1px 1px 1px white;
 	color: #6e6e6e;
 }
-.regbutton:hover, .demobutton:hover, .mailbutton:hover  {
+.regbutton:hover, .demobutton:hover, .mailbutton:hover, .signinbutton:hover  {
 	background-color: #f4f9fb;
 }
-.regbutton:active, .demobutton:active, .mailbutton:active  {
+.regbutton:active, .demobutton:active, .mailbutton:active, .signinbutton:active  {
 	background-color: #ecf3f6;
 }
 
@@ -499,6 +499,12 @@ input[id="backmailform"] {
 	width: 195px;
 	top:18px;
 	font-size: 11px;
+}
+.signinbutton {
+	letter-spacing: 3px;
+	height: 46px;
+	width: 300px;
+	font-size: 12px;
 }
 .demobutton {
 	letter-spacing: 3px;

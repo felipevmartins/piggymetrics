@@ -54,14 +54,14 @@ public class WebSecurityConfig {
         return http.build();
     }
 
-    /** Interactive login (form) used by the authorization code flow. */
+    /** Interactive login (form, served by LoginController) used by the authorization code flow. */
     @Bean
     @Order(3)
     public SecurityFilterChain loginFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(auth -> auth
                         .requestMatchers(EndpointRequest.to("prometheus")).permitAll()
                         .anyRequest().authenticated())
-                .formLogin(Customizer.withDefaults());
+                .formLogin(form -> form.loginPage("/login").permitAll());
         return http.build();
     }
 }

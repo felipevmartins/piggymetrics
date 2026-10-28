@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PiggyMetrics - Sign in</title>
+    <style>
+        body { margin: 0; background: #f3f3f3 url("/images/linesbackground.png"); font-family: Arial, Helvetica, sans-serif; }
+        #card { position: absolute; top: 0; bottom: 0; left: 0; right: 0; margin: auto; width: 300px; height: 470px; background: white; }
+        #piggy { width: 178px; height: 178px; margin: 0 auto; background: url("/images/piggy_large.gif") no-repeat; background-size: 178px 178px; }
+        #logotext { width: 172px; height: 65px; margin: 36px auto 0; background: url("/images/logotext_large.gif") no-repeat; background-size: 172px 65px; }
+        form { margin-top: 30px; }
+        input[type="text"], input[type="password"] { display: block; box-sizing: border-box; width: 300px; height: 46px; margin: 0 0 6px; padding: 0 15px; border: 0; outline: 3px double #a6ccd9; color: #4c4c4c; font-size: 15px; background: white; }
+        input::placeholder { color: #cdcdcd; }
+        input:focus { outline: 3px double #7ba1b4; }
+        button { display: block; width: 300px; height: 46px; margin-top: 12px; border: 0; outline: 3px double #a6ccd9; background: white; color: #6e6e6e; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; text-shadow: 1px 1px 1px white; cursor: pointer; }
+        button:hover { background: #f4f9fb; }
+        button:active { background: #ecf3f6; }
+        .message { margin: 0 0 12px; text-align: center; font-size: 13px; color: #c0504d; }
+        .links { margin-top: 18px; text-align: center; font-size: 13px; color: #525252; }
+        .links a { color: #7ba1b4; text-decoration: none; border-bottom: 1px dashed #7ba1b4; }
+    </style>
+</head>
+<body>
+    <div id="card">
+        <div id="piggy"></div>
+        <div id="logotext"></div>
+        <form method="post" action="{{action}}" autocomplete="off">
+            {{message}}
+            <input type="text" name="username" placeholder="enter your login" autofocus required>
+            <input type="password" name="password" placeholder="password" required>
+            <input type="hidden" name="{{csrfName}}" value="{{csrfToken}}">
+            <button type="submit">Sign in</button>
+        </form>
+        <div class="links">Or <a href="/">create new account</a></div>
+    </div>
+</body>
+</html>

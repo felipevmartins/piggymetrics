@@ -1,4 +1,4 @@
-# Relatorio final - piggymetrics Java 8 para 21 (F0 a F5)
+# Relatorio final - piggymetrics Java 8 para 21 (F0 a F5) e Java 25 (F6)
 
 Data: 2026-10-28. Branch `pilot/java8-to-21`, sem push. Detalhes por etapa em `E8-framework-plan.md`.
 
@@ -34,3 +34,6 @@ Password grant removido (browser usa authorization code + PKCE; sem refresh toke
 
 ## Proximos passos
 Validar em navegador; fixar a imagem JRE por digest; decidir sobre a chave/substituto da API de cambio; preparar a skill para Java 25 (Boot 4.1 declara suporte ate 27); revisar o tratamento dos poms/legacy listados no plano. Nao ha autorizacao para deploy em ambiente compartilhado.
+
+## Adendo F6 - Java 25 (2026-10-28)
+Piloto em GraalVM CE 25.0.2 (build e imagens `ghcr.io/graalvm/jdk-community:25.0.2`), bytecode 25 (major 69), JaCoCo 0.8.11 -> 0.8.14 (unica dependencia alterada; o 0.8.11 falhava em silencio nas classes do JDK). Commits 4227b2a, 40b0bed, e5c9ff6, tag `f6b-final`, sem push. Evidencia: build verde sem `skipTests`, `check_bytecode.py 69`, 119/119 testes sem removidos (`compare_surefire.py` vs `after7`), fluxos vivos de F5, retorno ensaiado para `:f4` (JRE 21). Riscos: aviso JEP 472 do Netty, imagem por tag e nao digest, login proprio do usuario fora da evidencia. A skill `java-upgrade` ganhou a linha 21 -> 25 e as licoes F0-F5 na branch `feat/java-upgrade-jdk25-lessons` do `agent-marketplace`, sem publicacao.

@@ -132,6 +132,18 @@ public class OAuthTokenContractTest {
     }
 
     @Test
+    public void loginPageIsTheCustomOneAndCarriesTheCsrfToken() throws Exception {
+        String html = mvc.perform(get("/login").param("error", ""))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(html, html.contains("PiggyMetrics - Sign in"));
+        assertTrue(html, html.contains("name=\"username\"") && html.contains("name=\"password\""));
+        assertTrue(html, html.matches("(?s).*name=\"_csrf\" value=\"[^\"]+\".*"));
+        assertTrue(html, html.contains("Invalid login or password."));
+        assertFalse(html, html.contains("{{"));
+    }
+
+    @Test
     public void passwordGrantIsNoLongerSupported() throws Exception {
         JsonNode rejected = body(mvc.perform(post("/oauth2/token").param("client_id", "browser")
                 .param("grant_type", "password").param("scope", "ui")
