@@ -350,7 +350,7 @@ F3b: auth-service reescrito no Spring Authorization Server (clientes browser, ac
 
 ## F4 - Boot 4.1.2 / Cloud 2025.1.4, bytecode 21, Jackson 3, starters modulares; F4m servidor MongoDB
 
-Estado: `em_execucao` (registrado em 2026-10-27, antes de editar). Dividida em F4a (framework e bytecode 21) e F4m (servidor MongoDB do compose). Um commit verificado por parte, so com gates verdes, sem push.
+Estado: `concluida` (F4a ea0fcd5, F4m f6cabc7, tag f4-final; registrado em 2026-10-27, antes de editar). Dividida em F4a (framework e bytecode 21) e F4m (servidor MongoDB do compose). Um commit verificado por parte, so com gates verdes, sem push.
 
 ### Entrada
 Commit b6c02e1 (tag `f3-final`): Boot 3.5.16, Cloud 2025.0.3, bytecode 17, 119 testes verdes, fluxos vivos validados. Imagens `:f2` guardadas; imagens `:f3` serao marcadas antes de reconstruir.
